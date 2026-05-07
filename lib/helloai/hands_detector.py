@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""HandsDetector ported from helloai.ext.hands_detector for the web IDE.
+"""웹 IDE용으로 이식된 :class:`HandsDetector` 모듈.
 
-Original: helloai-06-dev-2.8/helloai/helloai/ext/hands_detector/hands_detector.py
-The only change vs. the original is replacing the
-`from helloai.core.image import Image` import with the minimal Image shim
-defined here (sufficient for HandsDetector's own use).
+원본 위치는 ``helloai-06-dev-2.8/helloai/helloai/ext/hands_detector/hands_detector.py``
+입니다. ``from helloai.core.image import Image`` 임포트를 같은 패키지의
+공용 :class:`Image` shim 사용으로 바꾼 것이 유일한 변경 사항입니다.
+
+손 검출 외에도 손가락 펴짐 패턴을 12종 사전(:data:`_PATTERN_TO_SIGN`)과
+대조해 ``"thumbs_up"``, ``"v"``, ``"OK"`` 같은 짧은 사인 라벨을 자동으로
+붙여 줍니다(휴리스틱).
 """
 import math
 import web_cv2 as cv2
@@ -15,6 +18,7 @@ from .image import Image
 
 __all__ = ["HandsDetector"]
 tip_ids = [4, 8, 12, 16, 20]
+"""손가락 끝 마디(엄지/검지/중지/약지/소지) 랜드마크 인덱스."""
 
 _PATTERN_TO_SIGN = {
     (0, 0, 0, 0, 0): 'fist',
@@ -30,13 +34,47 @@ _PATTERN_TO_SIGN = {
     (1, 1, 0, 0, 1): 'ily',
     (1, 1, 0, 0, 0): 'L',
 }
+"""손가락 펴짐 5비트 패턴 → 사인 라벨 매핑.
+
+비트 순서는 ``(엄지, 검지, 중지, 약지, 소지)`` 이며 ``1`` 이 펴진 상태,
+``0`` 이 굽은 상태를 뜻합니다. 이 사전에 없는 패턴은 알 수 없는 사인으로
+처리되어 ``None`` 이 반환됩니다.
+"""
 
 # RGB; converted to BGR before being handed to mediapipe DrawingSpec.
 _RIGHT_HAND_LINE_RGB = (216, 191, 216)  # thistle (light purple)
+"""오른손 연결선 색(thistle, RGB).
+
+왼손과 오른손을 시각적으로 구분하기 위해 오른손에는 항상 같은 옅은
+보라색을 사용합니다. MediaPipe ``DrawingSpec`` 에 넘기기 전에 BGR 로
+변환됩니다.
+"""
 
 
 class HandsDetector:
+    """MediaPipe Hands 기반의 양손 검출기 + 사인 분류기.
+
+    한 프레임에서 최대 2개의 손을 찾고, 각 손의 21개 키포인트를 픽셀 좌표로
+    돌려줍니다. 손가락 펴짐 패턴과 :data:`_PATTERN_TO_SIGN` 매핑을 이용해
+    자동으로 짧은 사인 라벨을 붙여 줍니다(``"open_hand"``, ``"v"``, ``"OK"``
+    등).
+
+    Args:
+        draw_label (bool): ``True`` 면 :meth:`process` 가 손목 위에 사인
+            라벨 텍스트를 그립니다. 기본값은 ``True``.
+
+    Attributes:
+        sign (dict[str, str | None]): ``{'left': sign_id, 'right': sign_id}``.
+            가장 최근 :meth:`process` 에서 인식한 양손 사인. 검출되지 않은
+            쪽은 ``None``.
+    """
+
     def __init__(self, draw_label=True):
+        """검출기 인스턴스를 만들고 모델을 초기화합니다.
+
+        Args:
+            draw_label (bool): 사인 라벨 자동 표시 여부.
+        """
         self.__mp_drawing = mp.solutions.drawing_utils
         self.__mp_hands = mp.solutions.hands
         self.__hands = self.__mp_hands.Hands(
@@ -52,10 +90,37 @@ class HandsDetector:
         self._draw_label = bool(draw_label)
 
     def load_model(self):
+        """모델 로드 자리 표시자.
+
+        ``__init__`` 에서 이미 ``self.__hands`` 를 만들어 두므로 따로 할
+        일이 없습니다. 다른 검출기들과 시그니처를 맞추기 위해 존재합니다.
+        """
         pass
 
     def process(self, image, draw=True, line_width=4, circle_radius=6,
                 draw_color=[(255, 0, 0), (192, 192, 192)], show_label=None):
+        """한 프레임에서 양손을 검출하고 키포인트와 사인을 반환합니다.
+
+        Args:
+            image (Image): 입력 이미지(거울 모드 카메라 입력 가정).
+            draw (bool): ``True`` 면 손 스켈레톤과 사인 라벨을 프레임 위에
+                그립니다.
+            line_width (int): 연결선/점 굵기.
+            circle_radius (int): 관절 점 반지름.
+            draw_color (list[tuple[int, int, int]]): ``[관절_RGB, 연결선_RGB]``.
+                내부에서 BGR 로 변환해 그립니다. 단, 오른손 연결선만은
+                구분을 위해 :data:`_RIGHT_HAND_LINE_RGB` 색을 강제로 사용합니다.
+            show_label (bool | None): 사인 라벨 표시 여부를 호출 단위로
+                덮어씁니다. ``None`` 이면 생성자의 ``draw_label`` 을 사용합니다.
+
+        Returns:
+            tuple[Image, list[dict]]: ``(out_image, results)``.
+
+            * ``out_image`` 는 그리기가 반영된 :class:`Image`.
+            * ``results`` 는 검출된 손 수만큼의 dict 리스트. 각 dict 는
+              ``{'handedness': 'left'|'right', 'landmarks': [(x,y,z), ...]}``
+              형태이며, 손이 검출되지 않으면 빈 리스트 ``[]``.
+        """
         self.__draw = draw
 
         image = image.frame
@@ -148,9 +213,28 @@ class HandsDetector:
 
     @property
     def sign(self):
+        """가장 최근 :meth:`process` 의 양손 사인 결과를 반환합니다.
+
+        Returns:
+            dict[str, str | None]: ``{'left': sign_id, 'right': sign_id}``
+            형태. 검출되지 않은 손은 ``None``, 매핑되지 않은 손가락 패턴
+            역시 ``None``.
+        """
         return self.__sign
 
     def __find_angle(self, joint):
+        """21개 관절로부터 15개의 핑거 마디 각도를 계산해 보관합니다.
+
+        ``self.__angles`` 에 결과(numpy 배열, 도 단위) 를 채워 둡니다.
+        손가락 펴짐 판단에 직접 쓰이지는 않지만, 추가 분석을 위해 계산해
+        둡니다.
+
+        Args:
+            joint (numpy.ndarray): ``(21, 3)`` 모양의 관절 좌표 배열.
+
+        Returns:
+            list[float]: 계산된 각도 리스트(도 단위).
+        """
         self.__angles = []
         v1 = joint[
             [0, 1, 2, 3, 0, 5, 6, 7, 0, 9, 10, 11, 0, 13, 14, 15, 0, 17, 18, 19], :
@@ -175,6 +259,20 @@ class HandsDetector:
         return self.__angles.tolist()
 
     def fingers_up(self, side='right'):
+        """지정된 손의 손가락 펴짐 상태를 5비트 리스트로 돌려줍니다.
+
+        엄지손가락은 x축 비교(좌우), 나머지 네 손가락은 y축 비교(상하)로
+        판정합니다.
+
+        Args:
+            side (str): ``'left'`` 또는 ``'right'`` (대소문자 무관).
+                알 수 없는 값이거나 해당 손이 검출되지 않은 경우
+                ``[0, 0, 0, 0, 0]`` 을 돌려줍니다.
+
+        Returns:
+            list[int]: ``[엄지, 검지, 중지, 약지, 소지]`` 순서의 5비트 리스트.
+            ``1`` 이 펴짐, ``0`` 이 굽음.
+        """
         side = (side or '').lower()
         if side not in ('left', 'right'):
             return [0, 0, 0, 0, 0]
@@ -203,11 +301,19 @@ class HandsDetector:
         return fingers
 
     def recognize_sign(self, lm):
-        """Classify a hand sign from landmarks returned by process().
+        """손가락 펴짐 패턴을 :data:`_PATTERN_TO_SIGN` 과 비교해 사인 ID를 돌려줍니다.
 
-        `lm` is the second return value of process(). Returns a sign ID
-        string ('OK', 'v', 'fist', ...) or None when lm is empty or the
-        shape matches no known pattern.
+        ``OK`` 사인은 엄지/검지가 닿은 핀치 동작이라 엄지 비트가 신뢰할 수
+        없습니다. 이를 위해 OK 후보(중지·약지·소지가 모두 펴짐) 일 때는
+        엄지/검지 거리도 함께 검사합니다.
+
+        Args:
+            lm (Sequence[tuple]): :meth:`process` 가 돌려준 한 손의
+                21개 키포인트 좌표. 길이가 21 미만이면 ``None`` 반환.
+
+        Returns:
+            str | None: ``'OK'``, ``'thumbs_up'``, ``'v'``, ``'fist'`` 등의
+            사인 ID. 매칭되는 패턴이 없으면 ``None``.
         """
         if not lm or len(lm) < 21:
             return None
@@ -229,6 +335,19 @@ class HandsDetector:
         return _PATTERN_TO_SIGN.get(tuple(fingers))
 
     def __is_thumb_index_pinch(self, lm, threshold=0.35):
+        """엄지 끝과 검지 끝이 닿아 있는지(핀치) 판정합니다.
+
+        손 크기에 비례한 정규화 거리를 기준으로 하므로, 카메라와의 거리에
+        영향을 덜 받습니다.
+
+        Args:
+            lm (Sequence[tuple]): 한 손의 21개 키포인트.
+            threshold (float): 손 크기 대비 임계값(기본 0.35). 작을수록
+                "더 가까이 붙어야" 핀치로 인정합니다.
+
+        Returns:
+            bool: 핀치 동작이면 ``True``, 아니면 ``False``.
+        """
         thumb_tip = lm[4]
         index_tip = lm[8]
         wrist = lm[0]
@@ -243,6 +362,21 @@ class HandsDetector:
         return (d / hand_size) < threshold
 
     def distance(self, p1, p2, image, draw=True):
+        """두 키포인트 좌표 사이의 거리를 계산하고 시각화합니다.
+
+        :class:`PoseDetector.distance` 와 달리 ``p1``, ``p2`` 는 **인덱스가
+        아니라** 이미 꺼낸 ``(x, y, z)`` 튜플을 그대로 받습니다.
+
+        Args:
+            p1: 첫 점 ``(x, y, z)`` 튜플.
+            p2: 두 번째 점 ``(x, y, z)`` 튜플.
+            image (Image): 그릴 대상 이미지.
+            draw (bool): ``True`` 면 선/점/중심점을 프레임 위에 그립니다.
+
+        Returns:
+            tuple[float, Image, list[int]]: ``(length, out_image, [x1, y1, x2, y2, cx, cy])``.
+            ``length`` 는 두 점 사이의 픽셀 거리입니다.
+        """
         image = image.frame
         r = 10
         t = 3
@@ -260,6 +394,10 @@ class HandsDetector:
         return length, Image(image), [x1, y1, x2, y2, cx, cy]
 
     def __del__(self):
+        """가비지 컬렉션 시점에 MediaPipe ``Hands`` 인스턴스를 닫습니다.
+
+        해제 중 발생한 예외는 모두 삼킵니다.
+        """
         try:
             if self.__hands:
                 self.__hands.close()

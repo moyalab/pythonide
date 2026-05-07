@@ -1,4 +1,32 @@
 # -*-coding:utf-8-*-
+"""KAMIBOT(카미봇파이) 로봇 제어용 Python SDK 모듈.
+
+이 모듈은 KAMIBOT 본체와 시리얼(UART) 로 주고받는 20바이트 고정 길이
+패킷을 사람 친화적인 메서드 호출로 감싸는 :class:`KamibotPi` 클래스를
+제공합니다. 사용자는 보통 다음과 같이 한 줄로 시작합니다::
+
+    from pibot import KamibotPi
+    bot = KamibotPi(port="COM5")
+    bot.move_forward(1)
+    bot.turn_led_idx(2)
+    bot.beep()
+    bot.close()
+
+내부 구조 요약:
+
+* :class:`CommandType` / :class:`ModeType` — 펌웨어가 인식하는 명령/모드
+  바이트 상수.
+* :class:`PacketIndex` / :class:`RETURN_PACKET` — 송신/수신 패킷 안에서
+  각 필드가 위치한 인덱스.
+* :data:`NULL_COMMAND_PACKET` — 모든 메서드가 복사해서 채워 보내는 20바이트
+  기본 패킷.
+* :data:`LED` / :data:`LED_COLOR` / :class:`LedColor` — RGB LED 색상 단축 매핑.
+* :class:`Note` — ``melody()`` 인자로 쓰이는 MIDI 음계 상수.
+* :class:`KamibotPi` — 실제 사용자 진입 클래스. 이동, 모터, LED, 센서,
+  도형, 멜로디 등 모든 기능이 메서드로 노출됩니다.
+
+웹 IDE 환경에서는 ``serial`` / ``termcolor`` 패키지가 폴리필 형태로 제공됩니다.
+"""
 import sys
 import serial
 import time
@@ -7,6 +35,16 @@ from termcolor import cprint
 
 # 명령타입
 class CommandType:
+    """펌웨어가 인식하는 명령(command type) 바이트 상수 모음.
+
+    각 상수는 :class:`PacketIndex.COMMANDTYPE` 위치(또는 일부 패킷에서는
+    별도 모드 명령 자리)에 들어가는 1바이트 값입니다. 이름은 펌웨어
+    프로토콜 사양 그대로 보존되어 있어, 사양 문서를 그대로 코드와 매핑할
+    수 있습니다(예: ``MOVE_FORWARD_BLOCK = 0x02``).
+
+    실제 사용자 코드에서는 직접 다루기보다 :class:`KamibotPi` 의 고수준
+    메서드(``move_forward``, ``turn_left`` 등)를 통해 간접적으로 사용됩니다.
+    """
     FORCE_STOP = 0x01
     MOVE_FORWARD_BLOCK = 0x02
     MOVE_BACKWARD_BLOCK = 0x03
@@ -57,6 +95,23 @@ class CommandType:
 
 # 명령패킷의 인덱스
 class PacketIndex:
+    """송신용 20바이트 명령 패킷의 필드 위치(인덱스) 상수.
+
+    KAMIBOT 펌웨어는 항상 길이 20 의 고정 패킷을 주고받습니다.
+    각 메서드가 :data:`NULL_COMMAND_PACKET` 사본을 만든 뒤
+    ``packet[PacketIndex.MODETYPE] = ...`` 처럼 이 클래스의 상수를 인덱스로
+    써서 자리에 값을 채워 넣습니다.
+
+    Attributes:
+        START (int): 헤더 시작 바이트 위치(0).
+        LENGTH (int): 패킷 길이(20) 위치.
+        HWID, HWTYPE (int): 하드웨어 ID/타입 위치.
+        COMMANDTYPE (int): 읽기/쓰기 구분 등의 :class:`CommandType` 위치.
+        MODETYPE, MODECOMMAND (int): :class:`ModeType` 과 그 하위 명령 위치.
+        DATA0..DATA10 (int): 페이로드 영역.
+        INDEX (int): 명령 시퀀스 번호 위치(255 까지 순환).
+        END (int): 끝 바이트 위치(보통 ``0x5A``).
+    """
     START = 0
     LENGTH = 1
     HWID = 2
@@ -81,6 +136,21 @@ class PacketIndex:
 
 # 리턴 패킷의 인덱스
 class RETURN_PACKET:
+    """수신용 20바이트 응답 패킷의 필드 위치(인덱스) 상수.
+
+    펌웨어가 명령에 대한 응답으로 돌려주는 20바이트 패킷의 각 자리를
+    어디서 읽어야 하는지 알려줍니다. :meth:`KamibotPi._KamibotPi__process_return`
+    에서 이 상수들을 사용해 배터리, 객체/라인/색상 센서 값, 명령 인덱스,
+    페이로드 등을 추출합니다.
+
+    Attributes:
+        BATTERY (int): 배터리 잔량 위치.
+        LEFT_OBJECT, RIGHT_OBJECT (int): 좌/우 물체 감지 센서값 위치.
+        LEFT_LINE, CENTER_LINE, RIGHT_LINE (int): 라인 센서값 위치.
+        COLOR (int): 색상 인덱스 위치.
+        INDEX (int): 응답하는 원래 명령의 시퀀스 번호 위치.
+        DATA0..DATA3 (int): 추가 페이로드(예: 색상 RGB 성분).
+    """
     START = 0
     LENGTH = 1
     HWID = 2
@@ -104,6 +174,26 @@ class RETURN_PACKET:
 
 
 class ModeType:
+    """펌웨어의 동작 모드(모드 타입) 바이트 상수 모음.
+
+    한 패킷의 :class:`PacketIndex.MODETYPE` 위치에 들어가는 1바이트 값입니다.
+    KAMIBOT 은 모드별로 사용 가능한 하위 명령(모드 명령)이 다르므로,
+    "어떤 모드에서 어떤 일을 하라" 를 ``MODETYPE`` + ``MODECOMMAND`` 두
+    바이트로 표현합니다.
+
+    주요 모드:
+        * ``MAPBOARD`` / ``LINEMAP`` — 맵보드/라인맵 위에서의 칸 단위 이동.
+        * ``CONTROL`` — 좌/우 모터 직접 속도 제어.
+        * ``RGB`` — LED 색상 변경.
+        * ``TOP_STEPPER`` — 상단(top) 스텝 모터 회전.
+        * ``OBJECT_DETECTER`` / ``LINE_DETECTOR`` / ``COLOR_DETECTOR`` — 센서.
+        * ``BATTERY`` / ``VERSION`` — 상태 조회.
+        * ``DRAWSHAPE`` — 도형 그리기 모드.
+        * ``PRECISION_CTR`` — 정밀 제어(스텝/시간/cm 단위 이동).
+        * ``MELODY`` — 부저 음.
+        * ``LINE`` — 라인 트레이서 토글.
+        * ``INITIALIZE`` / ``RESET`` / ``EMERGENCY_STOP`` — 시스템 제어.
+    """
     MAPBOARD = 0x01
     CONTROL = 0x02
     RGB = 0x3
@@ -129,10 +219,12 @@ class ModeType:
 COMMANDTYPE_WRITE = 0x01
 COMMANDTYPE_READ = 0x02
 COMMANDTYPE_RETURN = 0x03
+"""명령 패킷의 ``COMMANDTYPE`` 자리에 들어가는 읽기/쓰기/응답 식별 바이트."""
 
 # 디바이스 타입
 HWTYPE_BOTPI = 0x00
 HWTYPE_XBLOCK = 0x10
+"""연결된 하드웨어 종류 식별 바이트 (KAMIBOT Pi / X-Block)."""
 
 # LED 색상 YELLOW
 TEST_COMMAND = [
@@ -141,6 +233,7 @@ TEST_COMMAND = [
     0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x5a,
 ]
+"""연결 확인용으로 LED 를 노란색으로 켜는 시험 명령 패킷(20바이트)."""
 
 NULL_COMMAND_PACKET = [
     0x41, 0x14, 0x01, HWTYPE_BOTPI, COMMANDTYPE_WRITE,
@@ -148,8 +241,16 @@ NULL_COMMAND_PACKET = [
     0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x5a,
 ]
+"""값이 모두 0 으로 초기화된 표준 송신 패킷(20바이트).
+
+각 메서드는 이 리스트를 슬라이스 복사(``[:]``) 한 뒤
+:class:`PacketIndex` 상수를 인덱스로 써서 ``MODETYPE``, ``MODECOMMAND``,
+``DATA*``, ``INDEX`` 자리에 값을 채워 보냅니다. 헤더(``0x41 0x14 0x01``)와
+끝 바이트(``0x5A``)는 모든 패킷이 공유합니다.
+"""
 
 DEFAULT_MOTOR_SPEED = 0x96      # 150
+"""모터 명령에서 별도 속도가 주어지지 않을 때 사용할 기본값(0x96 = 150)."""
 
 
 LED = {
@@ -163,14 +264,35 @@ LED = {
     "purple": [139, 0, 255],
     "white": [255, 255, 255],
 }
+"""LED 색 이름 → ``[R, G, B]`` 리스트 매핑.
+
+문자열 키로 색을 다루고 싶을 때 사용합니다. 클래스 형태(상수 접근)로
+같은 색을 쓰고 싶으면 :class:`LedColor` 를 사용하세요.
+"""
 
 LED_COLOR = [
     LED["off"], LED["red"], LED["orange"], LED["yellow"], LED["green"],
     LED["blue"], LED["skyblue"], LED["purple"], LED["white"]
 ]
+""":meth:`KamibotPi.turn_led_idx` 의 ``idx`` 인자가 가리키는 색 순서표.
+
+인덱스 0 부터 ``[off, red, orange, yellow, green, blue, skyblue, purple, white]``
+순서이며, 각 항목은 :data:`LED` 와 같은 ``[R, G, B]`` 리스트입니다.
+"""
 
 
 class LedColor:
+    """:meth:`KamibotPi.turn_led` 인자에 그대로 넣을 수 있는 색 상수 컨테이너.
+
+    Examples:
+        >>> bot.turn_led(*LedColor.RED)   # 빨간색 ON
+        >>> bot.turn_led(*LedColor.OFF)   # OFF
+
+    Attributes:
+        OFF (list[int]): ``[0, 0, 0]`` (소등).
+        RED, ORANGE, YELLOW, GREEN, BLUE, SKYBLUE, PURPLE, WHITE
+            (list[int]): 각 색의 ``[R, G, B]`` 리스트.
+    """
     OFF = LED["off"]
     RED = LED["red"]
     ORANGE = LED["orange"]
@@ -298,8 +420,46 @@ class Note:
 
 
 class KamibotPi:
+    """KAMIBOT(카미봇파이) 본체와 시리얼로 통신하는 메인 SDK 클래스.
+
+    한 인스턴스가 한 대의 KAMIBOT 과 1:1 로 연결됩니다. 생성과 동시에
+    지정한 포트/속도로 시리얼을 열고, 이후 모든 메서드는 20바이트 패킷을
+    써서 펌웨어에 명령을 보냅니다. 명령마다 응답 패킷을 한 번 받아 내부
+    상태(배터리, 센서값, 마지막 명령 인덱스 등)를 갱신합니다.
+
+    Examples:
+        가장 단순한 사용 예::
+
+            bot = KamibotPi(port="COM5")
+            bot.move_forward(1)
+            bot.turn_led_idx(2)   # 노란색 LED
+            bot.beep()
+            bot.close()
+
+    Args:
+        port (str | None): 시리얼 포트 이름. 예) ``"COM5"`` (Windows),
+            ``"/dev/ttyUSB0"`` (Linux). ``None`` 이면 즉시
+            ``ValueError`` 가 발생하며 프로세스가 종료됩니다.
+        baud (int): 통신 속도(baud rate). 기본 ``57600``.
+        timeout (int | float): 읽기 타임아웃(초). 기본 ``2``.
+        verbose (bool): ``True`` 이면 각 명령 호출 시 디버깅 메시지를 출력합니다.
+            기본 ``False``.
+    """
 
     def __init__(self, port=None, baud=57600, timeout=2, verbose=False):
+        """KAMIBOT 과 시리얼 연결을 열고 내부 상태를 초기화합니다.
+
+        Args:
+            port (str | None): 시리얼 포트 이름. ``None`` 이면 즉시 종료됩니다.
+            baud (int): 통신 속도(baud rate).
+            timeout (int | float): 읽기 타임아웃(초).
+            verbose (bool): 디버깅 출력 여부.
+
+        Note:
+            시리얼 포트를 열지 못하면 메시지를 출력하고 ``sys.exit()`` 으로
+            프로세스를 끝냅니다. 이 동작은 원본 SDK 의 정책을 그대로 따른
+            것입니다.
+        """
         self.__verbose = verbose
         self.__cmdIndex = 1     # 순차적으로 증가
 
@@ -340,14 +500,28 @@ class KamibotPi:
         #     sys.exit()
 
     def __get_idx(self):
+        """다음 명령에 사용할 시퀀스 인덱스(1~255)를 반환합니다.
+
+        패킷의 ``INDEX`` 자리에 들어가는 1바이트 값으로, 응답 패킷이
+        어느 명령에 대한 것인지 확인하는 데 사용됩니다. ``255`` 를 넘으면
+        다시 ``1`` 부터 순환합니다.
+
+        Returns:
+            int: 1~255 범위의 다음 인덱스.
+        """
         self.__cmdIndex = self.__cmdIndex + 1
         if self.__cmdIndex > 255:
             self.__cmdIndex = 1
         return self.__cmdIndex
 
     def close(self):
-        '''close후 exit()함수를 호출함 
-        '''
+        """시리얼 포트를 정리하고 프로세스를 종료합니다.
+
+        포트가 열려 있으면 버퍼를 비우고 닫은 뒤, 마지막에
+        ``sys.exit(0)`` 을 호출해 프로세스를 끝냅니다. 종료 메시지는 빨간
+        글씨로 출력됩니다. 종료 없이 그냥 포트만 닫고 싶다면 :meth:`disconnect`
+        를 사용하세요.
+        """
         try:
             if self.sr and self.sr.is_open:
                 self.sr.flush()
@@ -360,6 +534,12 @@ class KamibotPi:
 
 
     def disconnect(self):
+        """프로세스 종료 없이 시리얼 포트만 닫습니다.
+
+        :meth:`close` 와 다른 점은 ``sys.exit()`` 을 호출하지 않는다는
+        것입니다. 같은 프로그램에서 잠시 연결을 끊었다가 다시 잡고 싶을
+        때 사용합니다.
+        """
         try:
             if self.sr and self.sr.is_open:
                 self.sr.flush()
@@ -370,6 +550,18 @@ class KamibotPi:
 
 
     def __process_return(self):
+        """응답 20바이트를 한 패킷 단위로 받아 내부 상태에 반영합니다.
+
+        시리얼에서 데이터가 도착할 때까지 1ms 간격으로 폴링하며 20바이트가
+        모일 때까지 기다립니다. 모이면 :class:`RETURN_PACKET` 인덱스를
+        써서 모드/배터리/센서 값/마지막 명령 인덱스/페이로드를 추출해
+        ``self.__battery``, ``self.__left_object``, ``self.__data0`` …
+        같은 멤버에 채워 둡니다.
+
+        Note:
+            패킷 길이가 20이 아니면 길이 오류 메시지를 한 줄 출력하고
+            아무 일도 하지 않습니다(예외는 던지지 않습니다).
+        """
         data = []
         while len(data) < 20:
             if self.sr.inWaiting():
@@ -418,14 +610,28 @@ class KamibotPi:
         time.sleep(sec)
 
     def delayms(self, ms):
+        """주어진 밀리초만큼 기다립니다.
+
+        Args:
+            ms (int | float): 대기 시간(밀리초). 내부적으로 ``ms/1000`` 초
+                동안 ``time.sleep`` 합니다.
+
+        Returns:
+            None
+        """
         time.sleep(ms/1000)
 
 
     def wait(self, ms):
-        """_summary_
+        """:meth:`delayms` 의 별칭. 주어진 밀리초만큼 기다립니다.
+
+        가독성을 위해 다른 이름으로도 호출할 수 있게 둔 편의 메서드입니다.
 
         Args:
-            ms (int): 밀리초
+            ms (int | float): 대기 시간(밀리초).
+
+        Returns:
+            None
         """
         self.delayms(ms)
 
@@ -446,6 +652,15 @@ class KamibotPi:
             self.stop()
 
     def __start_linetracer(self,  speed):
+        """라인 트레이서 모드를 켜고 주어진 속도로 동작시킵니다(내부용).
+
+        :meth:`toggle_linetracer` 가 ``mode=True`` 로 호출되었을 때 사용합니다.
+        ``MODETYPE = ModeType.LINE`` / ``MODECOMMAND = 0x01`` 패킷을 만들어
+        ``DATA0`` 자리에 속도를 실어 보냅니다.
+
+        Args:
+            speed (int): 라인 트레이서 주행 속도.
+        """
         if self.__verbose:
             print("\n *__start_linetracer")
 
@@ -1659,6 +1874,23 @@ class KamibotPi:
         self.__draw_shape(cmd, radius, value & 0x00ff, (value >> 8) & 0x00ff)
 
     def __draw_shape(self,  cmd, len, val1=0, val2=0):
+        """도형 그리기 모드 패킷을 만들어 보내는 공통 헬퍼(내부용).
+
+        :meth:`draw_tri`, :meth:`draw_rect`, :meth:`draw_penta`,
+        :meth:`draw_hexa`, :meth:`draw_star`, :meth:`draw_circle`,
+        :meth:`draw_semicircle`, :meth:`draw_arc` 가 모두 이 함수를 통해
+        펌웨어에 도형 명령을 전달합니다.
+
+        Args:
+            cmd (int): 도형 종류를 식별하는 ``MODECOMMAND`` 바이트
+                (예: 삼각형 ``0x01``, 사각형 ``0x02``, 원 ``0x07``).
+            len (int): ``DATA0`` 자리. 도형의 한 변 길이(또는 반지름) cm.
+            val1 (int): ``DATA1`` 자리. 도형 종류에 따라 추가 파라미터로 사용.
+            val2 (int): ``DATA2`` 자리. 도형 종류에 따라 추가 파라미터로 사용.
+
+        Returns:
+            None
+        """
         if self.__verbose:
             print("\n * go_lrspeed_unit")
 
@@ -1736,15 +1968,24 @@ class KamibotPi:
         return None
 
     def angle3p(p1, p2, p3):
-        """3점 사이의 각도 계산 
+        """세 점이 ``p2`` 에서 만드는 각도(도 단위, 반시계 방향)를 계산합니다.
+
+        ``p1 → p2 → p3`` 순서를 기준으로, ``p2`` 를 꼭짓점으로 두고 ``p2 p1``
+        방향에서 ``p2 p3`` 방향까지 시계 반대 방향으로 회전한 각도를
+        돌려줍니다. 결과는 0 ~ 360 범위의 도(degree) 입니다.
 
         Args:
-            p1 : (x1, y1)
-            p2 : (x2, y2)
-            p3 : (x3, y3)
+            p1: 첫 점 ``(x, y, ...)``.
+            p2: 꼭짓점 ``(x, y, ...)``.
+            p3: 끝 점 ``(x, y, ...)``.
 
         Returns:
-            시계 반대방향의 각도       
+            float: 0 ~ 360 사이의 각도(도).
+
+        Note:
+            이 메서드는 인스턴스 멤버에 접근하지 않으므로 동작 자체는
+            정적이지만, 클래스 외부에서는 ``KamibotPi.angle3p(p1, p2, p3)``
+            처럼 호출해야 동작합니다(``self`` 인자가 시그니처에 없음).
         """
         Ax, Ay = p1[0]-p2[0], p1[1]-p2[1]
         Cx, Cy = p3[0]-p2[0], p3[1]-p2[1]
@@ -1759,30 +2000,33 @@ class KamibotPi:
         return rad * 180/math.pi
 
     def remap(self, value, source_range, target_range):
-        """Remap a value from the source range to the target range.
+        """원본 범위에 있던 값을 같은 비율로 목표 범위에 매핑해 돌려줍니다.
 
-        Examples ::
+        센서 입력값(예: 0~1023)을 모터 속도 범위(예: 0~100)로 옮길 때처럼
+        선형 비례 변환이 필요한 곳에서 사용합니다.
 
-                >>> remap(50, (0, 100), (0, 10))
-                5.0
+        Args:
+            value (float | int): 변환할 원본 값.
+            source_range (tuple[float, float]): ``value`` 가 속한 원본
+                범위 ``(s0, s1)``. ``s0 == s1`` 이면 0 으로 나누는 오류가
+                발생할 수 있으므로 호출자가 회피해야 합니다.
+            target_range (tuple[float, float]): 매핑할 목표 범위 ``(t0, t1)``.
 
-                >>> remap(5, (0, 10), (0, 100))
-                50.0
+        Returns:
+            float: 같은 비율로 ``target_range`` 안에 옮겨진 값.
 
-                >>> remap(5, (0, 10), (10, 20))
-                15.0
+        Examples:
+            >>> remap(50, (0, 100), (0, 10))
+            5.0
 
-                >>> remap(15, (10, 20), (0, 10))
-                5.0
+            >>> remap(5, (0, 10), (0, 100))
+            50.0
 
-        :param value: The value to be remapped.
+            >>> remap(5, (0, 10), (10, 20))
+            15.0
 
-        :param source_range: The source range for :code:`value`
-        :type source_range: tuple
-
-        :param target_range: The target range for :code:`value`
-        :type target_range: tuple
-
+            >>> remap(15, (10, 20), (0, 10))
+            5.0
         """
         s0, s1 = source_range
         t0, t1 = target_range

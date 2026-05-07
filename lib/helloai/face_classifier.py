@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
-"""FaceClassifier — load a .fcm face-keypoint model and classify webcam frames.
+"""FaceClassifier — ``.fcm`` 형식의 얼굴 키포인트 모델로 프레임을 분류하는 모듈.
 
-Independent of FaceDetector: keypoints are extracted on the JS side using
-exactly the same library and options that the training panel used
-(@mediapipe/tasks-vision FaceLandmarker), so training and inference share
-the same feature distribution.
+학습에 사용된 라이브러리/옵션과 정확히 동일한 ``@mediapipe/tasks-vision``
+의 ``FaceLandmarker`` 가 추론에서도 사용됩니다. 학습/추론 키포인트 분포가
+일치하므로 분류 정확도가 보존됩니다. :class:`FaceDetector` 와는 독립적으로
+동작합니다.
 
-`Result.landmarks` contains *only* the trained subset (FACE_KEY_INDICES, 82
-points), in the same order the training panel uses, in pixel coordinates.
+:attr:`Result.landmarks` 에는 학습에 사용된 부분집합인 ``FACE_KEY_INDICES``
+(82개) 키포인트만, 학습 패널과 동일한 순서로, 픽셀 좌표로 들어갑니다.
 
-    clf = FaceClassifier('models/emotion.fcm')
-    out_img, result = clf.process(Image(frame))
-    print(result.label, result.confidence)
+Examples:
+    감정 분류 모델 사용 예::
+
+        clf = FaceClassifier('models/emotion.fcm')
+        out_img, result = clf.process(Image(frame))
+        print(result.label, result.confidence)
 """
 import _mpBridge
 import web_cv2 as cv2
@@ -22,6 +25,19 @@ __all__ = ["FaceClassifier"]
 
 
 def _load_fcm(path):
+    """``.fcm`` 모델 파일을 읽어 바이트로 반환합니다.
+
+    절대경로면 그대로, 상대경로면 ``/work/`` 하위 → 원본 경로 순으로 시도합니다.
+
+    Args:
+        path: 모델 파일 경로.
+
+    Returns:
+        bytes: 모델 파일 전체 바이트.
+
+    Raises:
+        FileNotFoundError: 어떤 후보 경로에서도 파일을 열 수 없을 때.
+    """
     s = str(path)
     candidates = [s] if s.startswith("/") else ["/work/" + s, s]
     for c in candidates:
@@ -40,6 +56,12 @@ _FACE_GROUP_KEYS = (
     "leftEye",  "leftEyebrow",  "leftIris",
     "lips",
 )
+"""얼굴 메쉬 그룹 이름 순서.
+
+학습 패널의 ``DrawingUtils.drawConnectors`` 호출 순서와 같습니다.
+:meth:`FaceClassifier._draw_face_overlay` 가 이 순서로 메쉬 → 윤곽 →
+눈/눈썹/홍채 → 입술 순으로 그려서 학습 시 화면과 동일한 모양을 만듭니다.
+"""
 
 # 학습 패널 (faceTracker.drawFaceLandmarks) 의 drawConnectors 호출과 동일한
 # 색/두께를 BGR 로 옮긴 것. 순서도 학습 시와 같다 — tesselation 을 가장 먼저
@@ -55,17 +77,42 @@ _FACE_GROUP_STYLE = {
     "leftIris":     (( 48, 255,  48), 1),  # #30FF30
     "lips":         ((224, 224, 224), 1),  # #E0E0E0
 }
+"""그룹별 그리기 스타일(``(BGR 색, 선 두께)``).
+
+학습 패널이 사용하는 RGB hex 색상을 BGR로 변환한 값입니다. 이 색깔들은
+학습 화면과 추론 화면을 동일하게 보이게 하려는 것이므로 변경하지 마세요.
+"""
 
 
 class FaceClassifier:
-    """Face keypoint classifier loaded from a .fcm file.
+    """``.fcm`` 파일에서 불러온 얼굴 키포인트 분류기.
+
+    내부적으로 메인 스레드의 MediaPipe FaceLandmarker(478개 키포인트) 결과
+    중 학습에 쓰였던 82개 부분집합만 모델 입력으로 사용합니다. 화면에는
+    학습 패널과 동일한 풀 메쉬(478개)를 덮어 그리고, 그 위에 실제 추론에
+    쓰이는 82개 점을 빨간 점으로 표시해 주는 디자인입니다.
 
     Args:
-        model_path: 작업 폴더 기준 상대경로 또는 절대경로
-        draw_label: True 면 process() 가 좌상단에 라벨 텍스트를 렌더
+        model_path: ``.fcm`` 모델 파일 경로. 작업 폴더 기준 상대경로
+            또는 절대경로.
+        draw_label (bool): ``True`` 면 :meth:`process` 가 결과 라벨을
+            프레임 좌상단에 표시합니다. 기본값은 ``True``.
+
+    Attributes:
+        labels (list[str]): 모델이 학습한 클래스 이름 목록(프로퍼티).
     """
 
     def __init__(self, model_path, draw_label=True):
+        """모델 파일을 읽어 메인 스레드 분류기 인스턴스를 만듭니다.
+
+        Args:
+            model_path: ``.fcm`` 파일 경로.
+            draw_label (bool): 결과 라벨 자동 표시 여부.
+
+        Raises:
+            FileNotFoundError: 모델 파일을 열 수 없을 때.
+            ValueError: 파일이 ``face`` 종류의 모델이 아닐 때.
+        """
         data = _load_fcm(model_path)
         info = _mpBridge.call("clf.load", {"bytes": data})
         kind = info.get("kind") if hasattr(info, "get") else info["kind"]
@@ -86,9 +133,30 @@ class FaceClassifier:
 
     @property
     def labels(self):
+        """모델의 클래스 이름 목록 사본을 반환합니다.
+
+        Returns:
+            list[str]: 학습된 클래스 이름들의 새 리스트.
+        """
         return list(self._labels)
 
     def process(self, image, draw=True, show_label=None):
+        """한 프레임에서 얼굴 키포인트를 뽑고 분류 결과를 반환합니다.
+
+        Args:
+            image (Image): 입력 이미지. 내부 frame은 반드시 ``FrameRef`` 여야 합니다.
+            draw (bool): ``True`` 면 풀 메쉬 오버레이와 학습 부분집합 점을
+                프레임 위에 그립니다.
+            show_label (bool | None): 라벨 표시 여부를 호출 단위로 덮어씁니다.
+                ``None`` 이면 생성자의 ``draw_label`` 을 사용합니다.
+
+        Returns:
+            tuple[Image, Result]: ``(image, result)`` 형태.
+            ``result.landmarks`` 에는 학습에 쓰인 82개 키포인트가 들어갑니다.
+
+        Raises:
+            TypeError: 내부 frame이 ``FrameRef`` 가 아닐 때.
+        """
         frame = image.frame
         token = getattr(frame, "_token", None)
         if token is None:
@@ -140,6 +208,16 @@ class FaceClassifier:
         return image, result
 
     def _draw_face_overlay(self, frame, full_pix):
+        """학습 패널과 동일한 색·순서로 얼굴 메쉬를 덮어 그립니다.
+
+        그룹 그리기 순서는 ``tesselation`` (밑바탕) → 윤곽/눈/눈썹/홍채/
+        입술 순서이며, 학습 시 ``DrawingUtils.drawConnectors`` 의 호출
+        순서와 일치합니다.
+
+        Args:
+            frame: 그릴 대상 프레임 (numpy ndarray).
+            full_pix (list[tuple]): 478개 키포인트의 ``(x, y, z)`` 픽셀 좌표.
+        """
         # 학습 패널의 DrawingUtils.drawConnectors 호출 순서와 동일하게,
         # tesselation → 윤곽/눈/눈썹/홍채/입술 순으로 덮어 그린다.
         n = len(full_pix)
@@ -156,6 +234,10 @@ class FaceClassifier:
                     )
 
     def close(self):
+        """메인 스레드 분류기 인스턴스를 해제합니다.
+
+        한 번 호출 후 재호출은 무시되며, 해제 중 예외는 삼킵니다.
+        """
         if self._closed:
             return
         self._closed = True
@@ -165,6 +247,7 @@ class FaceClassifier:
             pass
 
     def __del__(self):
+        """가비지 컬렉션 시점에 안전하게 :meth:`close` 를 호출합니다."""
         try:
             self.close()
         except Exception:
