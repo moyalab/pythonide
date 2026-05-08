@@ -11,11 +11,11 @@ const e=[{id:"variable",title:"1. 변수",description:"값에 이름을 붙이�
   - 'a' + 'b' → 'ab' (문자열 이어 붙이기)
 그래서 변수를 쓸 때는 그 안에 어떤 타입의 값이 들었는지 알고 있어야 한다.
 값의 타입은 type() 함수로 확인할 수 있다.`,example:`# 다섯 가지 기본 타입
-a = 10            # int
-b = 3.14          # float
-c = 'hello'       # str
-d = True          # bool
-e = None          # NoneType
+a = 10            # 정수 (int)
+b = 3.14          # 실수 (float)
+c = 'hello'       # 문자열 (str)
+d = True          # 불린 (bool)
+e = None          # 값 없음 (NoneType)
 
 print(type(a))
 print(type(b))
