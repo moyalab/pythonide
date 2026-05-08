@@ -1,0 +1,1 @@
+import{c as t}from"./index-DDSLUidN.js";function s(a,e){const n=Math.min(a,e);return{sx:Math.floor((a-n)/2),sy:Math.floor((e-n)/2),size:n}}const r=t(a=>({face:null,hand:null,pose:null,image:null,setFace:e=>a({face:e}),setHand:e=>a({hand:e}),setPose:e=>a({pose:e}),setImage:e=>a({image:e})}));export{s as c,r as u};
