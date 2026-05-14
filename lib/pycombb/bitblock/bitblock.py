@@ -162,18 +162,11 @@ class Bitblock():
             except Exception as e:
                 print('An Exception occurred!', e)
 
-    def read_data(self):
-        """20바이트가 모두 수신될 때까지 동기적으로 응답 패킷을 읽습니다.
-
-        펌웨어는 모든 응답 패킷을 정확히 20바이트로 보내므로, 이 메서드는
-        버퍼에 1바이트가 들어올 때마다 읽어 누적하다가 20바이트가 되면
-        리스트로 반환합니다. 데이터가 들어오지 않는 동안에는 1ms 단위로
-        대기하므로 호출 스레드는 그동안 블로킹됩니다.
+    def __read_packet_raw(self):
+        """동기적으로 20바이트 한 패킷을 모은다(헤더 검사 없음).
 
         Returns:
-            list[int]: 길이 20의 응답 바이트 리스트. 정상이 아닌 경우
-            표준출력에 ``"Return data error!"`` 를 찍고 빈 리스트(``[]``)를
-            반환합니다.
+            list[int]: 길이 20의 바이트 리스트. 20이 아니면 빈 리스트.
         """
         data = []
         while len(data) < 20:
@@ -182,12 +175,28 @@ class Bitblock():
                 data.append(ord(c))
             else:
                 time.sleep(.001)
-        # print('return data length {0}'.format(len(data)))
-        if len(data) == 20:
+        return data if len(data) == 20 else []
+
+    def read_data(self):
+        """20바이트 응답 패킷을 한 개 반환합니다.
+
+        펌웨어가 100ms 주기로 자발 송신하는 0x66 sensor-report 패킷은
+        헤더 검사로 자동 폐기하고 다음 패킷을 읽기 때문에, 호출자는
+        0x66 을 절대 보지 않습니다.
+
+        Returns:
+            list[int]: 길이 20의 응답 바이트 리스트. 정상이 아닌 경우
+            표준출력에 ``"Return data error!"`` 를 찍고 빈 리스트(``[]``)를
+            반환합니다.
+        """
+        while True:
+            data = self.__read_packet_raw()
+            if not data:
+                print('Return data error!')
+                return []
+            if data[BBRETURN.HEADER_2] == BBRETURN.REPORT_MAGIC:
+                continue   # 0x66 보고 패킷 — 폐기하고 다음 패킷
             return data
-        else:
-            print('Return data error!')
-            return []
         
     # def __process_return(self):
     #     data = []
@@ -204,11 +213,39 @@ class Bitblock():
     #         print('Return data error!') 
     #         return []
 
+    def _drain_serial_nonblocking(self, max_packets=10):
+        """시리얼 버퍼에 누적된 패킷을 비차단으로 폐기한다.
+
+        idle 구간에서 펌웨어가 100ms 마다 송신하는 0x66 보고 패킷, 그리고
+        fire-and-forget 명령의 늦게 도착한 stale ACK 등을 정리하는 용도다.
+        ``inWaiting`` 이 20바이트 이상일 때만 한 패킷을 읽어 폐기하므로
+        진행 중인 수신을 가로채지 않는다.
+
+        Args:
+            max_packets (int): 한 번 호출에서 폐기할 최대 패킷 수(폭주
+                방지). 1초당 보고 패킷이 약 10개이므로 명령 간격이 짧으면
+                대부분 0~수 개 폐기로 끝난다.
+
+        Returns:
+            int: 실제로 폐기한 패킷 수.
+        """
+        n = 0
+        while n < max_packets and self.__client and self.__client.inWaiting() >= 20:
+            for _ in range(20):
+                self.__client.read()
+            n += 1
+        return n
+
     def __send(self, command):
         """내부 송신 헬퍼: 패킷을 시리얼로 즉시 전송합니다.
 
         :meth:`send_command` 와 동작은 같지만, ``Bitblock`` 내부 메서드들이
         외부 API 호출 비용 없이 호출하기 위한 사적인 진입점입니다.
+
+        송신 직전에 ``_drain_serial_nonblocking`` 으로 누적된 0x66 보고
+        패킷·stale ACK 를 비웁니다. SDK 가 단일 스레드 동기 모델이므로
+        직전 명령은 이미 자기 응답을 받고 끝난 상태이며, 남아 있는 데이터는
+        모두 폐기 안전한 보고/stale 패킷입니다.
 
         Args:
             command (Sequence[int]): 길이 20의 명령 패킷.
@@ -217,6 +254,10 @@ class Bitblock():
             None
         """
         if self.__client :
+            try:
+                self._drain_serial_nonblocking()
+            except Exception:
+                pass
             try:
                 self.__client.write(bytes(bytearray(command)))
                 self.__client.flush()
@@ -228,20 +269,45 @@ class Bitblock():
 
         펌웨어가 응답 패킷의 ``BBRETURN.INDEX`` 자리에 같은 값을 돌려주기
         때문에, 이 값은 "어떤 명령에 대한 응답인지" 를 식별하는 시퀀스
-        번호 역할을 합니다. 0~255 범위에서 순환합니다.
+        번호 역할을 합니다. 1~255 범위에서 순환하며, 0은 건너뜁니다.
+
+        0을 건너뛰는 이유: transport 가 끊긴 상태에서 ``read_data`` 가
+        돌려주는 영바이트 가짜 패킷의 INDEX 자리도 0 이라, 0을 정상 인덱스로
+        쓰면 그 시점에 잠깐 끊긴 게 "정상 응답" 으로 오인되어 false 데이터를
+        반환할 수 있다. 0을 사용 금지로 두면 모든 INDEX=0 응답을 자연스럽게
+        drain 단계에서 폐기할 수 있다.
 
         발급된 인덱스는 ``_pendingIndices`` 집합에 자동으로 추가되어,
         뒤이은 :meth:`_wait_for_response` 가 순서가 어긋난 응답을
         식별하고 폐기할 수 있게 합니다.
 
         Returns:
-            int: 다음 명령에 사용할 1바이트 시퀀스 번호.
+            int: 다음 명령에 사용할 1바이트 시퀀스 번호(1~255).
         """
-        self._packetIndex = (self._packetIndex + 1) % 256  # 0~255 사이에서 순환
+        self._packetIndex = (self._packetIndex + 1) % 256
+        if self._packetIndex == 0:
+            self._packetIndex = 1
         self._pendingIndices.add(self._packetIndex)
         return self._packetIndex
 
-    def _wait_for_response(self, expected):
+    def _send_drop_ack(self, command, *, ack=True):
+        """fire-and-forget 명령을 송신하고, 펌웨어 ACK 한 개를 즉시 폐기한다.
+
+        ACK 가 시리얼 버퍼에 stale 로 남아 다음 센서 read 의 응답 매칭을
+        방해하는 것을 막기 위함이다. ``read_data`` 가 0x66 보고 패킷은
+        이미 자동 폐기하므로 ACK drain 중에도 0x66 혼입에 안전하다.
+
+        Args:
+            command (Sequence[int]): 길이 20의 명령 패킷.
+            ack (bool): True 면 0.3초 timeout 으로 ACK 1개 폐기 시도.
+                펌웨어가 ACK 를 보내지 않는 ``BUZZER_NOTE`` /
+                ``BUZZER_CONTINUOUS`` 만 False 로 호출.
+        """
+        self.__send(command)
+        if ack:
+            self._wait_for_response(self._packetIndex, timeout=0.3)
+
+    def _wait_for_response(self, expected, timeout=None):
         """``expected`` 인덱스의 응답이 도착할 때까지 다른 패킷을 흘려보낸다.
 
         BitBlock 펌웨어는 fire-and-forget 명령(``display.*``, ``note``,
@@ -258,12 +324,16 @@ class Bitblock():
 
         Args:
             expected (int): 기다리는 응답 패킷의 INDEX 값.
+            timeout (float | None): None 이면 인스턴스 기본값
+                (``self.__timeout``) 사용. ACK 폐기처럼 짧게 기다리고 싶을 때
+                명시적으로 작은 값을 전달.
 
         Returns:
-            list[int] | None: 매칭된 20바이트 응답 패킷. ``self.__timeout`` 초
-            안에 매칭이 안 되거나 ``read_data`` 가 실패하면 ``None``.
+            list[int] | None: 매칭된 20바이트 응답 패킷. 타임아웃 안에
+            매칭이 안 되거나 ``read_data`` 가 실패하면 ``None``.
         """
-        deadline = time.time() + self.__timeout
+        effective_timeout = self.__timeout if timeout is None else timeout
+        deadline = time.time() + effective_timeout
         while True:
             packet = self.read_data()
             if not packet:
@@ -279,7 +349,7 @@ class Bitblock():
                 # 터미널에만 노랑색으로 한 줄 경고(Toast 없음).
                 cprint(
                     f"{ERROR.WRONG_PACKET_INDEX} "
-                    f"(기다린 인덱스={expected}, timeout {self.__timeout}s)",
+                    f"(기다린 인덱스={expected}, timeout {effective_timeout}s)",
                     "yellow",
                 )
                 self._pendingIndices.discard(expected)
@@ -389,7 +459,7 @@ class Bitblock():
             command[BBPACKET.DATA1] = r
             command[BBPACKET.DATA2] = g
             command[BBPACKET.DATA3] = b
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def symbol(self, symbol, color):
             """5x5 비트맵을 행 단위 5바이트로 한 번에 그립니다.
@@ -420,7 +490,7 @@ class Bitblock():
             command[BBPACKET.DATA6] = r
             command[BBPACKET.DATA7] = g
             command[BBPACKET.DATA8] = b
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def row(self, row, symbol, color):
             """매트릭스의 한 행만 비트마스크로 갱신합니다.
@@ -447,7 +517,7 @@ class Bitblock():
             command[BBPACKET.DATA3] = g
             command[BBPACKET.DATA4] = b
             command[BBPACKET.DATA5] = row
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def bright(self, bright):
             """LED 매트릭스의 전체 밝기를 설정합니다.
@@ -464,7 +534,7 @@ class Bitblock():
             command[BBPACKET.ACTION] = ACTION_CODE.MATRIX_LED
             command[BBPACKET.DATA0] = ACTION_MODE.DISPLAY_BRIGHT
             command[BBPACKET.DATA1] = bright
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def char(self, symbol, color):
             """매트릭스에 알파벳 한 글자를 표시합니다.
@@ -489,7 +559,7 @@ class Bitblock():
             command[BBPACKET.DATA2] = r
             command[BBPACKET.DATA3] = g
             command[BBPACKET.DATA4] = b
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
 
         def num(self, symbol, color):
@@ -515,7 +585,7 @@ class Bitblock():
             command[BBPACKET.DATA2] = r;
             command[BBPACKET.DATA3] = g;
             command[BBPACKET.DATA4] = b;
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def xy(self, coordX, coordY, color):
             """매트릭스의 한 픽셀만 색을 켭니다.
@@ -541,7 +611,7 @@ class Bitblock():
             command[BBPACKET.DATA3] = b;
             command[BBPACKET.DATA4] = coordX;
             command[BBPACKET.DATA5] = coordY;
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def effect(self, no):
             """미리 정의된 LED 매트릭스 효과를 재생합니다.
@@ -566,7 +636,7 @@ class Bitblock():
             command[BBPACKET.DATA0] = ACTION_MODE.DISPLAY_EFFECT
             command[BBPACKET.DATA1] = no
             command[BBPACKET.DATA2] = 1     # 아두이노에서 사용하는 값
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def clear(self):
             """LED 매트릭스를 모두 끕니다(검정으로 채웁니다).
@@ -606,7 +676,7 @@ class Bitblock():
         al = time & 0xff;
         command[BBPACKET.DATA2] = ah;
         command[BBPACKET.DATA3] = al;
-        self.__send(command)
+        self._send_drop_ack(command, ack=False)   # 펌웨어 BUZZER_NOTE 는 ACK 없음
 
     def melody(self, melody):
         """펌웨어 내장 멜로디를 번호로 재생합니다.
@@ -622,7 +692,7 @@ class Bitblock():
         command[BBPACKET.ACTION] = ACTION_CODE.BUZZER;
         command[BBPACKET.DATA0] = ACTION_MODE.BUZZER_MELODY;
         command[BBPACKET.DATA1] = melody;
-        self.__send(command)
+        self._send_drop_ack(command)
 
     def beep(self):
         """짧은 비프음을 한 번 울립니다.
@@ -636,7 +706,7 @@ class Bitblock():
         command[BBPACKET.INDEX] = self.__get_index()
         command[BBPACKET.ACTION] = ACTION_CODE.BUZZER;
         command[BBPACKET.DATA0] = ACTION_MODE.BUZZER_BEEP;
-        self.__send(command)
+        self._send_drop_ack(command)
 
     # -------------------------------------------------------
     # BUTTON
@@ -829,7 +899,7 @@ class Bitblock():
         command[BBPACKET.DATA0] = ACTION_MODE.DIGITAL_OUTPUT
         command[BBPACKET.DATA1] = pin
         command[BBPACKET.DATA2] = val
-        self.__send(command)
+        self._send_drop_ack(command)
 
 
     def digital_read(self, pin):
@@ -889,7 +959,7 @@ class Bitblock():
 
         command[BBPACKET.DATA2] = al; # 펌웨어에서 readShort 함수를 사용할려면 상위와 하위를 조심
         command[BBPACKET.DATA3] = ah;
-        self.__send(command)
+        self._send_drop_ack(command)
 
     def analog_read(self, pin):
         """지정한 핀의 아날로그 값을 16비트로 읽어 옵니다.
@@ -943,7 +1013,7 @@ class Bitblock():
         al = val & 0xff
         command[BBPACKET.DATA2] = al    # 펌웨어에서 readShort 함수를 사용할려면 상위와 하위를 조심
         command[BBPACKET.DATA3] = ah
-        self.__send(command)
+        self._send_drop_ack(command)
 
     # 메인보드의 서버도 핀번호로 동작시키자
     def servo(self, pin, val):
@@ -971,7 +1041,7 @@ class Bitblock():
             command[BBPACKET.ACTION] = ACTION_CODE.SERVO
         command[BBPACKET.DATA0] = pin;
         command[BBPACKET.DATA1] = val;
-        self.__send(command)
+        self._send_drop_ack(command)
 
 
     def ultrasonic(self, trig, echo):
@@ -1122,7 +1192,7 @@ class Bitblock():
             command[BBPACKET.INDEX] = self.__controller._Bitblock__get_index()
             command[BBPACKET.ACTION] = ACTION_CODE.RCCAR
             command[BBPACKET.DATA0] = ACTION_MODE.RCCAR_INITIALIZE
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def __rlspeed(self, dir_l, speed_l, dir_r, speed_r):
             """좌/우 바퀴의 방향과 속도를 동시에 설정합니다(내부 헬퍼).
@@ -1150,7 +1220,7 @@ class Bitblock():
             command[BBPACKET.DATA2] = speed_l;
             command[BBPACKET.DATA3] = dir_r;
             command[BBPACKET.DATA4] = speed_r;
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
         def move_forward(self, speed=100):
             """양쪽 바퀴를 같은 속도로 전진시킵니다.
@@ -1274,7 +1344,7 @@ class Bitblock():
             command[BBPACKET.INDEX] = self.__controller._Bitblock__get_index()
             command[BBPACKET.ACTION] = ACTION_CODE.RCCAR
             command[BBPACKET.DATA0] = ACTION_MODE.RCCAR_STOP
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
 
         def distance(self):
@@ -1366,7 +1436,7 @@ class Bitblock():
             command[BBPACKET.ACTION] = ACTION_CODE.SERVO
             command[BBPACKET.DATA0] = pin
             command[BBPACKET.DATA1] = clamp(val)
-            self.__controller._Bitblock__send(command)
+            self.__controller._send_drop_ack(command)
 
 # END CLASS
 

@@ -442,6 +442,9 @@ class BBRETURN:
     DATA13= 17 # ACTION
     DATA14= 18 # 10
     END=    19    # 13
+    # 두 번째 헤더 바이트(byte[1]) 값
+    RESPONSE_MAGIC = 0x55  # 명령 응답 패킷
+    REPORT_MAGIC   = 0x66  # 펌웨어가 100ms 주기로 자발 송신하는 sensor-report
 
 
 class BLEUUID:
