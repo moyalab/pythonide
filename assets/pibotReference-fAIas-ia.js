@@ -1521,4 +1521,135 @@ for rgb in LED_COLOR:
     bot.delay(0.4)
 
 bot.turn_led(0, 0, 0)
-bot.close()`}]}];export{e as REFERENCE};
+bot.close()`}]},{id:"virtual-keyboard",title:"13. Virtual Keyboard — drive KAMIBOT from the IDE keys",description:"Use the VirtualKeyboard module to read key input and control LEDs, melody, and driving in real time",icon:"keyboard",entries:[{name:"VirtualKeyboard module (concept)",summary:"Read the toolbar virtual keyboard synchronously and pair it with KAMIBOT actions.",details:'Pressing the keyboard icon in the IDE toolbar pops up a small virtual keyboard window. Buttons on that window (or the real keyboard while that window is focused) push key codes into the ``VirtualKeyboard`` module.\n\nThe use case is simple — receive key input from inside your KAMIBOT code to switch LED colors, drive the car, play melody notes, etc. for **real-time control**. Unlike ``input()`` which waits for a whole line and Enter, ``VirtualKeyboard`` delivers keys **one at a time** as they happen.\n\nKey points:\n  • Import with ``import VirtualKeyboard as kb`` (``kb`` is the conventional alias).\n  • There is only one function — ``kb.wait_key(ms)``. It waits up to ``ms`` milliseconds and returns ``-1`` if no key arrived.\n  • Letters/digits use lowercase ASCII codes; ESC/Enter/Space use the standard ASCII codes; arrows use custom codes in ``0x80~0x83``.\n  • Uses a queue **independent of** ``cv2.waitKey()``, so input never gets tangled even when an imshow window is open.\n\nThink of it as a "PC keyboard input" channel you can use the same way as KAMIBOT sensors such as ``get_object_detect()`` or ``get_line_sensor()``. It lets you instantly capture user intent (start/stop, color change, etc.) that sensors cannot read.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+# Open the virtual keyboard window from the toolbar icon first.
+print("Press any key (ESC to quit)")
+
+while True:
+    key = kb.wait_key(0)        # 0 = block until a key is pressed
+    if key == kb.ESC:
+        break
+    print("got key code:", key)
+
+bot.close()`},{name:"kb.wait_key(ms)",summary:"Wait for the next single key. Returns ``-1`` if nothing arrived within ``ms``.",details:"Args:\n  ms (int): wait time in milliseconds. ``0`` or less means **block forever** until a key arrives.\nReturns:\n  int: the pressed key code, or ``-1`` on timeout.\n\nTwo usage patterns:\n\n  1) **Blocking mode** (``ms=0``): the call stalls until a key arrives. Clean for menu-style code that only needs one key at a time.\n  2) **Non-blocking mode** (small positive ``ms``, e.g. ``20``): wait briefly and return ``-1`` if nothing arrived. Use this when a driving loop needs to keep polling sensors or driving motors independent of key input.\n\nKAMIBOT commands wait for a serial response, so each call already takes some time. A typical main loop keeps ``kb.wait_key`` short, around 0~30 ms.",example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+while True:
+    key = kb.wait_key(20)        # wait 20 ms then move on
+    if key == kb.ESC:
+        break
+
+    # Change color only when a key arrives
+    if key == kb.SPACE:
+        bot.turn_led(255, 0, 0)
+    elif key != -1:
+        bot.turn_led(0, 0, 255)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"Key-code constants",summary:"Letters are lowercase ASCII; special keys use module constants for readability.",details:'Rather than memorising numeric codes, compare with the constants exposed on the module — e.g. ``kb.ESC``.\n\nLetters / digits (lowercase ASCII):\n  ``kb.A`` – ``kb.Z``        = letters (`ord("a")` – `ord("z")`)\n  ``kb.NUM_0`` – ``kb.NUM_9`` = digits (`ord("0")` – `ord("9")`)\n\nControl / common keys (standard ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\nArrows (custom codes in 0x80+ to avoid colliding with printable ASCII):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\nNote: letter constants are all **lowercase** codes. The virtual keyboard does not carry Shift state, so ``kb.A`` is enough; ``ord("a")`` works identically if you prefer a literal.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi, LED_COLOR
+
+bot = KamibotPi()
+
+# Number keys 1~9 → indexes of LED_COLOR (9 preset colors)
+DIGIT_KEYS = [kb.NUM_1, kb.NUM_2, kb.NUM_3, kb.NUM_4, kb.NUM_5,
+              kb.NUM_6, kb.NUM_7, kb.NUM_8, kb.NUM_9]
+
+print("1-9 = color index, SPACE = white, ESC = quit")
+while True:
+    key = kb.wait_key(0)
+    if key == kb.ESC:
+        break
+
+    if key in DIGIT_KEYS:
+        idx = DIGIT_KEYS.index(key)
+        bot.turn_led(*LED_COLOR[idx])
+    elif key == kb.SPACE:
+        bot.turn_led(255, 255, 255)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"Example: digit keys drive LED + melody together",summary:"One key press changes the LED color and plays a note at the same time — a mini instrument / signal pad.",details:`The strength of the virtual keyboard is that "one key = one action" reflects on KAMIBOT instantly. The example below performs both of the following at once on a single key press:
+  1) Change the LED color to the one mapped to that key.
+  2) Use \`\`bot.melody\`\` to briefly play the note mapped to that key.
+
+Putting the key → (color, note) mapping in a single dict means adding or changing a key only requires editing one line. Much cleaner than a long chain of conditionals.
+
+The implementation uses \`\`kb.wait_key(0)\`\` in **blocking mode**. The LEDs never flicker between presses and motors are idle, leaving the serial line quiet. A command is exchanged only at the moment a new key arrives, so the communication stays clean.
+
+Key mapping:
+  • 1 → red + C4
+  • 2 → yellow + D4
+  • 3 → green + E4
+  • 4 → blue + F4
+  • 5 → purple + G4
+  • SPACE → all off (LED off, no beep)
+  • ESC → quit`,example:`import VirtualKeyboard as kb
+from pibot import KamibotPi, Note
+
+bot = KamibotPi()
+
+# key → (R, G, B, note) in one mapping
+PALETTE = {
+    kb.NUM_1: (255,   0,   0, Note.C4),
+    kb.NUM_2: (255, 255,   0, Note.D4),
+    kb.NUM_3: (  0, 255,   0, Note.E4),
+    kb.NUM_4: (  0,   0, 255, Note.F4),
+    kb.NUM_5: (200,   0, 200, Note.G4),
+}
+
+print("1-5 = color+note, SPACE = off, ESC = quit")
+while True:
+    key = kb.wait_key(0)
+    if key == kb.ESC:
+        break
+
+    if key in PALETTE:
+        r, g, b, note = PALETTE[key]
+        bot.turn_led(r, g, b)
+        bot.melody(note, 0.2)
+    elif key == kb.SPACE:
+        bot.turn_led(0, 0, 0)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"Example: drive KAMIBOT with WASD",summary:"Drive KAMIBOT from the PC keyboard in real time. The car moves only while keys keep coming.",details:'For driving, "moves while a key is held, stops when released" feels natural. Since the virtual keyboard only delivers events one key at a time, the pattern is **start as soon as a key arrives → auto-stop a short time later**. Too short feels jittery, too long feels sluggish — keep ``wait_key`` polling around 30~50 ms, and fall through to ``stop`` when no key arrives.\n\nFor driving you pick from two command families:\n  • ``go_forward_speed(L, R)`` / ``go_backward_speed`` — direct wheel speeds, good for fine-grained control.\n  • ``move_forward(value)`` and other unit-distance moves — runs to completion in one call, not suitable for real-time joystick-style control.\n\nThe first family (``*_speed``) is what we want here. Use ``go_dir_speed(ldir, lspeed, rdir, rspeed)`` to set each wheel direction independently — e.g. left backwards + right forwards = an in-place left pivot.\n\nKey mapping:\n  • W / S          : forward / backward\n  • A / D          : pivot left / pivot right\n  • SPACE          : immediate stop\n  • 1 / 2 / 3      : speed 40 / 70 / 100\n  • ESC            : quit\n\nWrapping in ``try/finally`` guarantees ``bot.stop()`` and ``bot.close()`` run even on exception or ESC quit — so the car never rolls away.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+speed = 70
+
+ACTIONS = {
+    kb.W: lambda: bot.go_forward_speed(speed, speed),
+    kb.S: lambda: bot.go_backward_speed(speed, speed),
+    kb.A: lambda: bot.go_dir_speed("b", speed, "f", speed),   # pivot left (L back + R forward)
+    kb.D: lambda: bot.go_dir_speed("f", speed, "b", speed),   # pivot right
+    kb.SPACE: lambda: bot.stop(),
+}
+
+print("W/A/S/D = drive, SPACE = stop, 1/2/3 = speed, ESC = quit")
+try:
+    while True:
+        key = kb.wait_key(30)        # poll every 30 ms
+        if key == kb.ESC:
+            break
+
+        # Speed-change keys
+        if key == kb.NUM_1:   speed = 40
+        elif key == kb.NUM_2: speed = 70
+        elif key == kb.NUM_3: speed = 100
+
+        action = ACTIONS.get(key)
+        if action:
+            action()
+        elif key == -1:
+            # No key arrived — auto-stop for safety
+            bot.stop()
+finally:
+    bot.stop()
+    bot.close()`}]}];export{e as REFERENCE};

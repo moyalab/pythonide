@@ -81,6 +81,7 @@ class Bitblock():
         self.__baud = baud
         self.__client = None
         self._packetIndex = 1;
+        self._pendingIndices = set()    # 송신 후 응답을 못 받은 인덱스들
         self.display = self.Display(self)
         self.pin = self.PIN()
 
@@ -229,11 +230,60 @@ class Bitblock():
         때문에, 이 값은 "어떤 명령에 대한 응답인지" 를 식별하는 시퀀스
         번호 역할을 합니다. 0~255 범위에서 순환합니다.
 
+        발급된 인덱스는 ``_pendingIndices`` 집합에 자동으로 추가되어,
+        뒤이은 :meth:`_wait_for_response` 가 순서가 어긋난 응답을
+        식별하고 폐기할 수 있게 합니다.
+
         Returns:
             int: 다음 명령에 사용할 1바이트 시퀀스 번호.
         """
         self._packetIndex = (self._packetIndex + 1) % 256  # 0~255 사이에서 순환
+        self._pendingIndices.add(self._packetIndex)
         return self._packetIndex
+
+    def _wait_for_response(self, expected):
+        """``expected`` 인덱스의 응답이 도착할 때까지 다른 패킷을 흘려보낸다.
+
+        BitBlock 펌웨어는 fire-and-forget 명령(``display.*``, ``note``,
+        ``digital_write`` 등)에 대해서도 응답 패킷을 돌려보내지만, SDK 의 해당
+        메서드들은 그 응답을 읽지 않는다. 그래서 시리얼 버퍼에 stale 응답이
+        남고, 다음 센서 호출이 자기 응답 대신 그 응답을 읽어 영구적인
+        off-by-one 미스매치가 발생한다. 또한 응답이 송신 순서대로 돌아오지
+        않을 수 있는 경우도 같은 메커니즘으로 흡수된다.
+
+        이 메서드는 ``read_data`` 를 반복 호출하면서, 인덱스가 ``expected`` 와
+        같은 패킷이 나올 때까지 다른 패킷을 폐기한다. 폐기되는 패킷의
+        인덱스가 ``_pendingIndices`` 에 있으면 함께 제거한다(자기 응답이 늦게
+        온 fire-and-forget 명령의 마무리 처리).
+
+        Args:
+            expected (int): 기다리는 응답 패킷의 INDEX 값.
+
+        Returns:
+            list[int] | None: 매칭된 20바이트 응답 패킷. ``self.__timeout`` 초
+            안에 매칭이 안 되거나 ``read_data`` 가 실패하면 ``None``.
+        """
+        deadline = time.time() + self.__timeout
+        while True:
+            packet = self.read_data()
+            if not packet:
+                self._pendingIndices.discard(expected)
+                return None
+            idx = packet[BBRETURN.INDEX]
+            if idx == expected:
+                self._pendingIndices.discard(idx)
+                return packet
+            # 다른 인덱스 — fire-and-forget 의 ACK 거나 순서가 어긋난 응답.
+            self._pendingIndices.discard(idx)
+            if time.time() > deadline:
+                # 터미널에만 노랑색으로 한 줄 경고(Toast 없음).
+                cprint(
+                    f"{ERROR.WRONG_PACKET_INDEX} "
+                    f"(기다린 인덱스={expected}, timeout {self.__timeout}s)",
+                    "yellow",
+                )
+                self._pendingIndices.discard(expected)
+                return None
 
     class PIN:
         """인스턴스 단위 핀 매핑(``bot.pin.P0`` 형식 접근).
@@ -611,10 +661,8 @@ class Bitblock():
         command[BBPACKET.INDEX] = self.__get_index()
         command[BBPACKET.ACTION] = ACTION_CODE.BUTTON
         self.__send(command)
-        packet = self.read_data()
-
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         # print(self._packetIndex, ' ## ', packet[BBRETURN.INDEX])
         # print(split_and_join(packet))
@@ -652,10 +700,8 @@ class Bitblock():
         command[BBPACKET.ACTION] = ACTION_CODE.TOUCH;
         command[BBPACKET.DATA0] = ACTION_MODE.TOUCH_VALUES;
         self.__send(command)
-        packet = self.read_data()
-
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
 
         # 5, 6
@@ -696,9 +742,8 @@ class Bitblock():
         command[BBPACKET.INDEX] = self.__get_index()
         command[BBPACKET.ACTION] = ACTION_CODE.MPU_ACTION;
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         return packet[13]==1,packet[14]==1,packet[15]==1,packet[16]==1
     # -------------------------------------------------------
@@ -719,9 +764,8 @@ class Bitblock():
         command[BBPACKET.INDEX] = self.__get_index()
         command[BBPACKET.ACTION] = ACTION_CODE.LIGHT_SENSOR;
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         # 5, 6
         al = packet[5]
@@ -754,9 +798,8 @@ class Bitblock():
         command[BBPACKET.INDEX] = self.__get_index()
         command[BBPACKET.ACTION] = ACTION_CODE.MIC_SENSOR;
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         # 5, 6
         al = packet[5]
@@ -810,9 +853,8 @@ class Bitblock():
         command[BBPACKET.DATA0] = ACTION_MODE.DIGITAL_PULLUP    #디지털 풀업
         command[BBPACKET.DATA1] = pin
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         val = packet[5]
         return val
@@ -867,9 +909,8 @@ class Bitblock():
         command[BBPACKET.DATA0] = ACTION_MODE.ANALOG_INPUT;
         command[BBPACKET.DATA1] = pin;
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
 
         # 5, 6
@@ -952,9 +993,8 @@ class Bitblock():
         command[BBPACKET.DATA0] = trig
         command[BBPACKET.DATA1] = echo
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         return packet[5]
 
@@ -976,9 +1016,8 @@ class Bitblock():
         command[BBPACKET.ACTION] = ACTION_CODE.TMPHUM
         command[BBPACKET.DATA0] = pin
         self.__send(command)
-        packet = self.read_data()
-        if self._packetIndex != packet[BBRETURN.INDEX]:
-            print(ERROR.WRONG_PACKET_INDEX)
+        packet = self._wait_for_response(self._packetIndex)
+        if packet is None:
             return
         temp = packet[5]
         humi = packet[6]
@@ -1261,9 +1300,8 @@ class Bitblock():
             command[BBPACKET.DATA1] = 39 #P7
             command[BBPACKET.DATA2] = 5  #P9
             self.__controller._Bitblock__send(command)
-            packet = self.__controller.read_data()
-            if self.__controller._packetIndex != packet[BBRETURN.INDEX]:
-                print(ERROR.WRONG_PACKET_INDEX)
+            packet = self.__controller._wait_for_response(self.__controller._packetIndex)
+            if packet is None:
                 return
             return packet[6]
         
@@ -1287,9 +1325,8 @@ class Bitblock():
             command[BBPACKET.ACTION] = ACTION_CODE.RCCAR
             command[BBPACKET.DATA0] = ACTION_MODE.RCCAR_LINESENSOR
             self.__controller._Bitblock__send(command)
-            packet = self.__controller.read_data()
-            if self.__controller._packetIndex != packet[BBRETURN.INDEX]:
-                print(ERROR.WRONG_PACKET_INDEX)
+            packet = self.__controller._wait_for_response(self.__controller._packetIndex)
+            if packet is None:
                 return
             # 6, 7
             al = packet[6]

@@ -1521,4 +1521,135 @@ for rgb in LED_COLOR:
     bot.delay(0.4)
 
 bot.turn_led(0, 0, 0)
-bot.close()`}]}];export{t as REFERENCE};
+bot.close()`}]},{id:"virtual-keyboard",title:"13. 가상 키보드 — IDE 키로 카미봇 조종",description:"VirtualKeyboard 모듈로 키 입력을 받아 LED · 멜로디 · 주행을 실시간 제어",icon:"keyboard",entries:[{name:"VirtualKeyboard 모듈 (개념)",summary:"툴바의 가상 키보드를 동기적으로 읽어 카미봇 동작과 묶을 수 있다.",details:'IDE 툴바의 키보드 버튼을 누르면 화면에 작은 가상 키보드 창이 뜬다. 이 창의 버튼(혹은 그 창이 포커스를 가진 상태의 실제 키보드)을 누르면 키 코드가 ``VirtualKeyboard`` 모듈로 흘러 들어온다.\n\n용도는 단순하다 — 카미봇 코드 안에서 키 입력을 받아 LED 색을 바꾸거나, 차체를 운전하거나, 멜로디를 울리는 등 **실시간 제어**를 손쉽게 만들 수 있다. ``input()`` 처럼 한 줄을 통째로 입력받고 엔터를 기다리는 방식이 아니라, 키 **한 개씩** 그때그때 받아 처리하는 게 핵심이다.\n\n핵심 특징:\n  • ``import VirtualKeyboard as kb`` 한 줄로 사용한다(관례적으로 ``kb`` 별칭).\n  • 함수는 ``kb.wait_key(ms)`` 한 개뿐이다. ``ms`` 만큼 기다리고, 키가 없으면 ``-1`` 을 돌려준다.\n  • 알파벳/숫자 키는 소문자 ASCII 코드, ESC/Enter/Space 등은 표준 ASCII 코드, 화살표는 ``0x80~0x83`` 의 커스텀 코드.\n  • ``cv2.waitKey()`` 와 **독립된 큐**를 쓰므로 imshow 창이 떠 있어도 두 입력이 섞이지 않는다.\n\n카미봇의 ``get_object_detect()`` · ``get_line_sensor()`` 같은 센서 입력과 같은 결로 쓸 수 있는 "PC 키보드 입력" 채널이라고 생각하면 된다. 센서가 보지 못하는 사용자 의도(시작/정지/색 변경 등)를 즉시 받아 처리할 수 있다.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+# 툴바의 키보드 아이콘을 눌러 가상 키보드 창을 먼저 띄워 두자.
+print("아무 키나 눌러 보세요 (ESC 로 종료)")
+
+while True:
+    key = kb.wait_key(0)        # 0 = 키가 눌릴 때까지 무한 대기
+    if key == kb.ESC:
+        break
+    print("받은 키 코드:", key)
+
+bot.close()`},{name:"kb.wait_key(ms)",summary:"다음 키 한 개를 기다린다. ``ms`` 이내에 안 들어오면 ``-1``.",details:"Args:\n  ms (int): 대기 시간(밀리초). ``0`` 이하이면 키가 눌릴 때까지 **무한 대기**한다.\nReturns:\n  int: 눌린 키의 코드. 타임아웃이면 ``-1``.\n\n두 가지 사용 패턴이 있다.\n\n  1) **블로킹 모드** (``ms=0``): 키가 들어올 때까지 멈춘다. 메뉴 선택처럼 한 번에 한 키만 받으면 되는 경우에 깔끔하다.\n  2) **논블로킹 모드** (``ms`` 작은 양수, 예: ``20``): 짧게만 기다려 보고 키가 없으면 ``-1`` 을 돌려준다. 주행 루프처럼 키 입력과 별개로 센서 폴링이나 모터 제어를 이어가야 할 때 쓴다.\n\n카미봇 명령은 시리얼 응답을 기다리므로 자체적으로 어느 정도 시간이 걸린다. 따라서 메인 루프에서 ``kb.wait_key`` 의 ``ms`` 는 보통 0~30 정도로 작게 두는 것이 자연스럽다.",example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+while True:
+    key = kb.wait_key(20)        # 20ms만 기다리고 즉시 다음 줄로
+    if key == kb.ESC:
+        break
+
+    # 키가 들어왔을 때만 색을 바꾼다.
+    if key == kb.SPACE:
+        bot.turn_led(255, 0, 0)
+    elif key != -1:
+        bot.turn_led(0, 0, 255)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"키 코드 상수표",summary:"문자 키는 소문자 ASCII, 특수 키는 모듈 상수로 비교한다.",details:'키 비교는 숫자 코드를 외우는 대신 ``kb.ESC`` 처럼 모듈에 정의된 상수를 쓰면 읽기 쉽다.\n\n문자/숫자 (소문자 ASCII 코드):\n  ``kb.A`` ~ ``kb.Z``      = 알파벳 (`ord("a")` ~ `ord("z")`)\n  ``kb.NUM_0`` ~ ``kb.NUM_9`` = 숫자 (`ord("0")` ~ `ord("9")`)\n\n제어/공용 키 (표준 ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\n화살표 (ASCII 와 충돌을 피하려고 0x80+ 커스텀 코드):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\n주의: 알파벳 상수는 모두 **소문자** 코드다. 가상 키보드는 Shift 입력을 따로 전달하지 않으므로 ``kb.A`` 한 가지로 비교하면 된다. 직접 비교가 필요하면 ``ord("a")`` 같은 식으로 적어도 동일하다.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi, LED_COLOR
+
+bot = KamibotPi()
+
+# 숫자키 1~9 → LED_COLOR 의 9가지 색 인덱스 매핑
+DIGIT_KEYS = [kb.NUM_1, kb.NUM_2, kb.NUM_3, kb.NUM_4, kb.NUM_5,
+              kb.NUM_6, kb.NUM_7, kb.NUM_8, kb.NUM_9]
+
+print("1~9 = 색 인덱스, SPACE = 흰색, ESC = 종료")
+while True:
+    key = kb.wait_key(0)
+    if key == kb.ESC:
+        break
+
+    if key in DIGIT_KEYS:
+        idx = DIGIT_KEYS.index(key)
+        bot.turn_led(*LED_COLOR[idx])
+    elif key == kb.SPACE:
+        bot.turn_led(255, 255, 255)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"예제: 숫자키로 LED · 멜로디 동시 컨트롤",summary:"키 한 번에 LED 색과 음 한 개가 동시에 바뀌는 미니 악기 / 신호등.",details:`가상 키보드의 위력은 "키 한 개 = 한 동작" 이 즉시 카미봇에 반영된다는 점이다. 아래 예제는 키 한 개로 다음 두 가지를 **동시에** 실행한다.
+  1) LED 색을 그 키에 대응되는 색으로 바꾼다.
+  2) \`\`bot.melody\`\` 로 그 키에 대응되는 음을 짧게 울린다.
+
+키 → (색, 음) 매핑을 한 곳에 모은 dict 로 두면, 키를 추가하거나 바꿀 때 코드 한 줄만 손대면 된다. 비교문을 길게 늘어 놓는 것보다 훨씬 깔끔하다.
+
+구현 핵심은 \`\`kb.wait_key(0)\`\` 으로 **블로킹 모드**를 쓴 점이다. 키를 누르기 전까지 LED 가 깜빡일 일도 없고, 모터를 잡고 있을 필요도 없어 시리얼 라인이 한가하다. 다음 키가 들어온 순간에만 명령이 한 번씩 오가므로, 통신이 매우 깨끗하다.
+
+키 매핑:
+  • 1 → 빨강 + C4
+  • 2 → 노랑 + D4
+  • 3 → 초록 + E4
+  • 4 → 파랑 + F4
+  • 5 → 보라 + G4
+  • SPACE → 모두 끔 (LED off, 비프 없음)
+  • ESC → 종료`,example:`import VirtualKeyboard as kb
+from pibot import KamibotPi, Note
+
+bot = KamibotPi()
+
+# 키 → (R, G, B, 음계) 한 곳에 모은 매핑
+PALETTE = {
+    kb.NUM_1: (255,   0,   0, Note.C4),
+    kb.NUM_2: (255, 255,   0, Note.D4),
+    kb.NUM_3: (  0, 255,   0, Note.E4),
+    kb.NUM_4: (  0,   0, 255, Note.F4),
+    kb.NUM_5: (200,   0, 200, Note.G4),
+}
+
+print("1~5 = 색+음, SPACE = 끄기, ESC = 종료")
+while True:
+    key = kb.wait_key(0)
+    if key == kb.ESC:
+        break
+
+    if key in PALETTE:
+        r, g, b, note = PALETTE[key]
+        bot.turn_led(r, g, b)
+        bot.melody(note, 0.2)
+    elif key == kb.SPACE:
+        bot.turn_led(0, 0, 0)
+
+bot.turn_led(0, 0, 0)
+bot.close()`},{name:"예제: WASD 로 카미봇 운전",summary:"PC 키보드로 카미봇을 실시간 조종한다. 키가 들어오는 동안만 움직인다.",details:'카미봇 조종은 "키가 눌린 동안만 움직이고, 떼면 멈춘다" 가 자연스럽다. 가상 키보드는 "키 한 개" 단위로만 이벤트를 주기 때문에, **키를 받는 즉시 시작 → 짧은 시간 후 자동 정지** 패턴을 쓴다. 너무 짧으면 끊겨 보이고, 너무 길면 반응이 둔해지므로 보통 ``wait_key`` 폴링 주기를 30~50ms 로 잡고, 키가 없을 때는 ``stop`` 으로 떨어지게 둔다.\n\n카미봇 주행 명령은 두 종류 중 고르면 된다.\n  • ``go_forward_speed(L, R)`` / ``go_backward_speed`` — 양쪽 바퀴 속도를 직접 지정. 정밀 제어용.\n  • ``move_forward(value)`` 등 단위 이동 — 한 번 호출하면 끝까지 도는 명령이라 실시간 조종에는 부적합.\n\n실시간 조종에는 첫 번째(``*_speed``)가 알맞다. ``go_dir_speed(ldir, lspeed, rdir, rspeed)`` 로 좌우 방향을 따로 주면 제자리 회전도 깔끔하게 만든다(왼쪽 후진 + 오른쪽 전진 = 좌회전).\n\n키 매핑:\n  • W / S          : 전진 / 후진\n  • A / D          : 제자리 좌/우 회전\n  • SPACE          : 즉시 정지\n  • 1 / 2 / 3      : 속도 40 / 70 / 100\n  • ESC            : 종료\n\n``try/finally`` 로 묶어 두면 예외나 ESC 종료 시에도 ``bot.stop()`` 과 ``bot.close()`` 가 반드시 호출돼 차가 굴러가지 않는다.',example:`import VirtualKeyboard as kb
+from pibot import KamibotPi
+
+bot = KamibotPi()
+
+speed = 70
+
+ACTIONS = {
+    kb.W: lambda: bot.go_forward_speed(speed, speed),
+    kb.S: lambda: bot.go_backward_speed(speed, speed),
+    kb.A: lambda: bot.go_dir_speed("b", speed, "f", speed),   # 좌회전 (왼쪽 후진+오른쪽 전진)
+    kb.D: lambda: bot.go_dir_speed("f", speed, "b", speed),   # 우회전
+    kb.SPACE: lambda: bot.stop(),
+}
+
+print("W/A/S/D = 주행, SPACE = 정지, 1/2/3 = 속도, ESC = 종료")
+try:
+    while True:
+        key = kb.wait_key(30)        # 30ms 마다 키 확인
+        if key == kb.ESC:
+            break
+
+        # 속도 변경 키
+        if key == kb.NUM_1:   speed = 40
+        elif key == kb.NUM_2: speed = 70
+        elif key == kb.NUM_3: speed = 100
+
+        action = ACTIONS.get(key)
+        if action:
+            action()
+        elif key == -1:
+            # 키가 안 들어오면 안전을 위해 자동 정지
+            bot.stop()
+finally:
+    bot.stop()
+    bot.close()`}]}];export{t as REFERENCE};

@@ -798,4 +798,137 @@ try:
 finally:
     car.stop()
     bb.display.clear()
+    bb.disconnect()`}]},{id:"virtual-keyboard",title:"11. 가상 키보드 — IDE 키로 BitBlock 조종",description:"VirtualKeyboard 모듈로 키 입력을 받아 LED · 부저 · RC카를 실시간 제어",icon:"keyboard",entries:[{name:"VirtualKeyboard 모듈 (개념)",summary:"툴바의 가상 키보드를 동기적으로 읽어 BitBlock 동작과 묶을 수 있다.",details:'IDE 툴바의 키보드 버튼을 누르면 화면에 작은 가상 키보드 창이 뜬다. 이 창의 버튼(혹은 그 창이 포커스를 가진 상태의 실제 키보드)을 누르면 키 코드가 ``VirtualKeyboard`` 모듈로 흘러 들어온다.\n\n용도는 단순하다 — BitBlock 코드 안에서 키 입력을 받아 LED 색을 바꾸거나, RC카를 운전하거나, 부저를 울리는 등 **실시간 제어**를 손쉽게 만들 수 있다. ``input()`` 처럼 한 줄을 통째로 입력받고 엔터를 기다리는 방식이 아니라, 키 **한 개씩** 그때그때 받아 처리하는 게 핵심이다.\n\n핵심 특징:\n  • ``import VirtualKeyboard as kb`` 한 줄로 사용한다(관례적으로 ``kb`` 별칭).\n  • 함수는 ``kb.wait_key(ms)`` 한 개뿐이다. ``ms`` 만큼 기다리고, 키가 없으면 ``-1`` 을 돌려준다.\n  • 알파벳/숫자 키는 소문자 ASCII 코드, ESC/Enter/Space 등은 표준 ASCII 코드, 화살표는 ``0x80~0x83`` 의 커스텀 코드.\n  • ``cv2.waitKey()`` 와 **독립된 큐**를 쓰므로 imshow 창이 떠 있어도 두 입력이 섞이지 않는다.\n\n즉 BitBlock 의 ``button()`` / ``touch()`` 와 같은 결로 쓸 수 있는 "PC 키보드 입력" 채널이라고 생각하면 된다.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock
+
+bb = Bitblock()
+bb.connect()
+
+# 툴바의 키보드 아이콘을 눌러 가상 키보드 창을 먼저 띄워 두자.
+print("아무 키나 눌러 보세요 (ESC 로 종료)")
+
+try:
+    while True:
+        key = kb.wait_key(0)        # 0 = 키가 눌릴 때까지 무한 대기
+        if key == kb.ESC:
+            break
+        print("받은 키 코드:", key)
+finally:
+    bb.disconnect()`},{name:"kb.wait_key(ms)",summary:"다음 키 한 개를 기다린다. ``ms`` 이내에 안 들어오면 ``-1``.",details:"Args:\n  ms (int): 대기 시간(밀리초). ``0`` 이하이면 키가 눌릴 때까지 **무한 대기**한다.\nReturns:\n  int: 눌린 키의 코드. 타임아웃이면 ``-1``.\n\n두 가지 사용 패턴이 있다.\n\n  1) **블로킹 모드** (``ms=0``): 키가 들어올 때까지 멈춘다. 메뉴 선택처럼 한 번에 한 키만 받으면 되는 경우에 깔끔하다.\n  2) **논블로킹 모드** (``ms`` 작은 양수, 예: ``20``): 짧게만 기다려 보고 키가 없으면 ``-1`` 을 돌려준다. 게임 루프처럼 키 입력과 별개로 LED/모터를 갱신해야 할 때 쓴다.",example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR, wait
+
+bb = Bitblock()
+bb.connect()
+
+try:
+    while True:
+        key = kb.wait_key(20)        # 20ms만 기다리고 즉시 다음 줄로
+        if key == kb.ESC:
+            break
+
+        # 키가 들어왔든 안 들어왔든, 매 사이클 LED를 갱신한다.
+        if key == kb.SPACE:
+            bb.display.color(COLOR.RED)
+        elif key != -1:
+            bb.display.color(COLOR.BLUE)
+
+        wait(10)
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"키 코드 상수표",summary:"문자 키는 소문자 ASCII, 특수 키는 모듈 상수로 비교한다.",details:'키 비교는 숫자 코드를 외우는 대신 ``kb.ESC`` 처럼 모듈에 정의된 상수를 쓰면 읽기 쉽다.\n\n문자/숫자 (소문자 ASCII 코드):\n  ``kb.A`` ~ ``kb.Z``      = 알파벳 (`ord("a")` ~ `ord("z")`)\n  ``kb.NUM_0`` ~ ``kb.NUM_9`` = 숫자 (`ord("0")` ~ `ord("9")`)\n\n제어/공용 키 (표준 ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\n화살표 (ASCII 와 충돌을 피하려고 0x80+ 커스텀 코드):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\n주의: 알파벳 상수는 모두 **소문자** 코드다. 가상 키보드는 Shift 입력을 따로 전달하지 않으므로 ``kb.A`` 한 가지로 비교하면 된다. 직접 비교가 필요하면 ``ord("a")`` 같은 식으로 적어도 동일하다.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR
+
+bb = Bitblock()
+bb.connect()
+
+# 자주 쓰는 키 → 색 매핑 테이블
+color_map = {
+    kb.NUM_1: COLOR.RED,
+    kb.NUM_2: COLOR.GREEN,
+    kb.NUM_3: COLOR.BLUE,
+    kb.NUM_4: COLOR.YELLOW,
+    kb.SPACE: COLOR.WHITE,
+}
+
+try:
+    print("1~4 키 = 색 변경, SPACE = 흰색, ESC = 종료")
+    while True:
+        key = kb.wait_key(0)
+        if key == kb.ESC:
+            break
+        if key in color_map:
+            bb.display.color(color_map[key])
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"예제: 화살표 키로 LED 그림 그리기",summary:"커서를 화살표로 움직이면서 SPACE 로 칠해 5x5 LED 매트릭스에 그림을 그린다.",details:'가상 키보드의 위력은 "키 한 개 = 한 동작" 이 즉시 BitBlock 에 반영된다는 점이다. 아래 예제는 5x5 LED 위에 커서를 두고:\n  • 화살표 → 커서 이동\n  • SPACE  → 현재 위치 켜기\n  • C      → 전체 지우기\n  • ESC    → 종료\n식으로 동작한다.\n\n구현 핵심은 두 가지다. 첫째, 커서 위치를 ``(x, y)`` 변수로 들고 다닌다. 둘째, 매 키 입력 후 ``bb.display.clear()`` 로 화면을 비우고 "켠 점들" + "커서" 를 다시 그린다(가장 단순한 이중 버퍼). 점을 켜는 색과 커서 색을 다르게 두면 커서가 어디 있는지 한눈에 보인다.\n\n``kb.wait_key(0)`` 으로 블로킹 모드를 썼다 — 키를 누르기 전까지 LED 가 깜빡일 일이 없고, 누른 순간에만 화면이 바뀌어 매우 부드럽다.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR
+
+bb = Bitblock()
+bb.connect()
+
+W, H = 5, 5
+pixels = set()        # 켜진 점들의 (x, y) 좌표
+cx, cy = 2, 2         # 커서 시작 위치 (가운데)
+
+def redraw():
+    bb.display.clear()
+    for x, y in pixels:
+        bb.display.xy(x, y, COLOR.YELLOW)
+    bb.display.xy(cx, cy, COLOR.RED)        # 커서
+
+try:
+    redraw()
+    print("화살표=이동, SPACE=칠하기, C=전체 지우기, ESC=종료")
+    while True:
+        key = kb.wait_key(0)
+        if key == kb.ESC:
+            break
+        elif key == kb.ARROW_LEFT  and cx > 0:     cx -= 1
+        elif key == kb.ARROW_RIGHT and cx < W - 1: cx += 1
+        elif key == kb.ARROW_UP    and cy > 0:     cy -= 1
+        elif key == kb.ARROW_DOWN  and cy < H - 1: cy += 1
+        elif key == kb.SPACE:
+            pixels.add((cx, cy))
+        elif key == kb.C:
+            pixels.clear()
+        redraw()
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"예제: WASD 로 RC카 운전",summary:"PC 키보드로 BB-Car 를 실시간 조종한다. 키가 들어오는 동안만 움직인다.",details:'RC카 조종은 "키가 눌린 동안만 움직이고, 떼면 멈춘다" 가 자연스럽다. 가상 키보드는 "키 한 개" 단위로만 이벤트를 주기 때문에, **키를 받는 즉시 시작 → 짧은 시간 후 자동 정지** 패턴을 쓴다. 너무 짧으면 끊겨 보이고, 너무 길면 반응이 둔해지므로 200~300ms 정도가 무난하다.\n\n핵심은 ``kb.wait_key(ms)`` 의 ``ms`` 값이다. 작은 값(예: 30ms)을 주면 사이클이 빨라 키 누름에 즉각 반응하고, 키가 안 들어오면 자동 정지로 흐른다.\n\n키 매핑:\n  • W / S          : 전진 / 후진\n  • A / D          : 제자리 좌/우 회전\n  • SPACE          : 즉시 정지\n  • 1 / 2 / 3      : 속도 80 / 130 / 200\n  • ESC            : 종료\n\n``finally:`` 절에서 반드시 ``car.stop()`` 을 호출해 두자. 예외나 ESC 로 빠져나가도 차가 굴러가지 않는다.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock
+
+bb = Bitblock()
+bb.connect()
+car = bb.rccar_init()
+
+speed = 130
+
+ACTIONS = {
+    kb.W: lambda: car.move_forward(speed),
+    kb.S: lambda: car.move_backward(speed),
+    kb.A: lambda: car.pivot_left(speed),
+    kb.D: lambda: car.pivot_right(speed),
+    kb.SPACE: lambda: car.stop(),
+}
+
+try:
+    print("W/A/S/D = 주행, SPACE = 정지, 1/2/3 = 속도, ESC = 종료")
+    while True:
+        key = kb.wait_key(30)        # 30ms 마다 키 확인
+        if key == kb.ESC:
+            break
+
+        # 속도 변경 키
+        if key == kb.NUM_1:   speed = 80
+        elif key == kb.NUM_2: speed = 130
+        elif key == kb.NUM_3: speed = 200
+
+        action = ACTIONS.get(key)
+        if action:
+            action()
+        elif key == -1:
+            # 키가 안 들어오면 안전을 위해 자동 정지
+            car.stop()
+finally:
+    car.stop()
     bb.disconnect()`}]}];export{n as BITBLOCK_TUTORIAL};

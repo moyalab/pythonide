@@ -806,4 +806,137 @@ try:
 finally:
     car.stop()
     bb.display.clear()
+    bb.disconnect()`}]},{id:"virtual-keyboard",title:"11. Virtual Keyboard — drive BitBlock from the IDE keys",description:"Use the VirtualKeyboard module to read key input and control LEDs, buzzer, and the RC car in real time",icon:"keyboard",entries:[{name:"VirtualKeyboard module (concept)",summary:"Read the toolbar virtual keyboard synchronously and pair it with BitBlock actions.",details:'Pressing the keyboard icon in the IDE toolbar pops up a small virtual keyboard window. Buttons on that window (or the real keyboard while that window is focused) push key codes into the ``VirtualKeyboard`` module.\n\nThe use case is simple — receive key input from inside your BitBlock code to switch LED colors, drive the RC car, sound the buzzer, etc. for **real-time control**. Unlike ``input()`` which waits for a whole line and Enter, ``VirtualKeyboard`` delivers keys **one at a time** as they happen.\n\nKey points:\n  • Import with ``import VirtualKeyboard as kb`` (``kb`` is the conventional alias).\n  • There is only one function — ``kb.wait_key(ms)``. It waits up to ``ms`` milliseconds and returns ``-1`` if no key arrived.\n  • Letters/digits use lowercase ASCII codes; ESC/Enter/Space use the standard ASCII codes; arrows use custom codes in ``0x80~0x83``.\n  • Uses a queue **independent of** ``cv2.waitKey()``, so input never gets tangled even when an imshow window is open.\n\nThink of it as a "PC keyboard input" channel you can use the same way as ``button()`` / ``touch()`` on BitBlock.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock
+
+bb = Bitblock()
+bb.connect()
+
+# Open the virtual keyboard window from the toolbar icon first.
+print("Press any key (ESC to quit)")
+
+try:
+    while True:
+        key = kb.wait_key(0)        # 0 = block until a key is pressed
+        if key == kb.ESC:
+            break
+        print("got key code:", key)
+finally:
+    bb.disconnect()`},{name:"kb.wait_key(ms)",summary:"Wait for the next single key. Returns ``-1`` if nothing arrived within ``ms``.",details:"Args:\n  ms (int): wait time in milliseconds. ``0`` or less means **block forever** until a key arrives.\nReturns:\n  int: the pressed key code, or ``-1`` on timeout.\n\nTwo usage patterns:\n\n  1) **Blocking mode** (``ms=0``): the call stalls until a key arrives. Clean for menu-style code that only needs one key at a time.\n  2) **Non-blocking mode** (small positive ``ms``, e.g. ``20``): wait briefly and return ``-1`` if nothing arrived. Use this when a game loop needs to refresh LEDs/motors independent of key input.",example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR, wait
+
+bb = Bitblock()
+bb.connect()
+
+try:
+    while True:
+        key = kb.wait_key(20)        # wait 20 ms then move on
+        if key == kb.ESC:
+            break
+
+        # Refresh the LED every cycle, whether a key arrived or not.
+        if key == kb.SPACE:
+            bb.display.color(COLOR.RED)
+        elif key != -1:
+            bb.display.color(COLOR.BLUE)
+
+        wait(10)
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"Key-code constants",summary:"Letters are lowercase ASCII; special keys use module constants for readability.",details:'Rather than memorising numeric codes, compare with the constants exposed on the module — e.g. ``kb.ESC``.\n\nLetters / digits (lowercase ASCII):\n  ``kb.A`` – ``kb.Z``        = letters (`ord("a")` – `ord("z")`)\n  ``kb.NUM_0`` – ``kb.NUM_9`` = digits (`ord("0")` – `ord("9")`)\n\nControl / common keys (standard ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\nArrows (custom codes in 0x80+ to avoid colliding with printable ASCII):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\nNote: letter constants are all **lowercase** codes. The virtual keyboard does not carry Shift state, so ``kb.A`` is enough; ``ord("a")`` works identically if you prefer a literal.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR
+
+bb = Bitblock()
+bb.connect()
+
+# Map common keys to colors
+color_map = {
+    kb.NUM_1: COLOR.RED,
+    kb.NUM_2: COLOR.GREEN,
+    kb.NUM_3: COLOR.BLUE,
+    kb.NUM_4: COLOR.YELLOW,
+    kb.SPACE: COLOR.WHITE,
+}
+
+try:
+    print("1-4 = change color, SPACE = white, ESC = quit")
+    while True:
+        key = kb.wait_key(0)
+        if key == kb.ESC:
+            break
+        if key in color_map:
+            bb.display.color(color_map[key])
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"Example: draw on the LEDs with arrow keys",summary:"Move a cursor with the arrows and stamp a pixel with SPACE on the 5x5 LED matrix.",details:'The strength of the virtual keyboard is that "one key = one action" reflects on the BitBlock instantly. The example below places a cursor on the 5x5 LEDs and:\n  • arrows → move the cursor\n  • SPACE  → turn on the current cell\n  • C      → clear everything\n  • ESC    → quit\n\nTwo implementation tricks. First, the cursor position is kept in ``(cx, cy)``. Second, on every key press the screen is cleared and the "lit pixels" plus the "cursor" are drawn again (the simplest form of double buffering). Using a different color for the cursor makes its location obvious at a glance.\n\nWe used ``kb.wait_key(0)`` in blocking mode — the LEDs never flicker between key presses, and they update only on the moment a key is pressed, which feels very smooth.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock, COLOR
+
+bb = Bitblock()
+bb.connect()
+
+W, H = 5, 5
+pixels = set()        # (x, y) coordinates of lit cells
+cx, cy = 2, 2         # cursor starts in the centre
+
+def redraw():
+    bb.display.clear()
+    for x, y in pixels:
+        bb.display.xy(x, y, COLOR.YELLOW)
+    bb.display.xy(cx, cy, COLOR.RED)        # cursor
+
+try:
+    redraw()
+    print("arrows = move, SPACE = stamp, C = clear, ESC = quit")
+    while True:
+        key = kb.wait_key(0)
+        if key == kb.ESC:
+            break
+        elif key == kb.ARROW_LEFT  and cx > 0:     cx -= 1
+        elif key == kb.ARROW_RIGHT and cx < W - 1: cx += 1
+        elif key == kb.ARROW_UP    and cy > 0:     cy -= 1
+        elif key == kb.ARROW_DOWN  and cy < H - 1: cy += 1
+        elif key == kb.SPACE:
+            pixels.add((cx, cy))
+        elif key == kb.C:
+            pixels.clear()
+        redraw()
+finally:
+    bb.display.clear()
+    bb.disconnect()`},{name:"Example: drive the RC car with WASD",summary:"Drive BB-Car from the PC keyboard in real time. The car moves only while keys keep coming.",details:'For an RC car, "moves while a key is held, stops when released" feels natural. Since the virtual keyboard only delivers events one key at a time, the pattern is **start as soon as a key arrives → auto-stop a short time later**. Too short feels jittery, too long feels sluggish — somewhere around 200–300ms is comfortable.\n\nThe key dial is the ``ms`` argument of ``kb.wait_key(ms)``. A small value (e.g. 30ms) keeps the cycle fast so the car reacts immediately, and when no key arrives the code falls through to auto-stop.\n\nKey mapping:\n  • W / S          : forward / backward\n  • A / D          : pivot left / pivot right\n  • SPACE          : immediate stop\n  • 1 / 2 / 3      : speed 80 / 130 / 200\n  • ESC            : quit\n\nAlways call ``car.stop()`` in the ``finally:`` block. Even when an exception or ESC quits the program, the car will not roll away.',example:`import VirtualKeyboard as kb
+from pycombb import Bitblock
+
+bb = Bitblock()
+bb.connect()
+car = bb.rccar_init()
+
+speed = 130
+
+ACTIONS = {
+    kb.W: lambda: car.move_forward(speed),
+    kb.S: lambda: car.move_backward(speed),
+    kb.A: lambda: car.pivot_left(speed),
+    kb.D: lambda: car.pivot_right(speed),
+    kb.SPACE: lambda: car.stop(),
+}
+
+try:
+    print("W/A/S/D = drive, SPACE = stop, 1/2/3 = speed, ESC = quit")
+    while True:
+        key = kb.wait_key(30)        # poll every 30 ms
+        if key == kb.ESC:
+            break
+
+        # Speed-change keys
+        if key == kb.NUM_1:   speed = 80
+        elif key == kb.NUM_2: speed = 130
+        elif key == kb.NUM_3: speed = 200
+
+        action = ACTIONS.get(key)
+        if action:
+            action()
+        elif key == -1:
+            # No key arrived — auto-stop for safety
+            car.stop()
+finally:
+    car.stop()
     bb.disconnect()`}]}];export{e as BITBLOCK_TUTORIAL};
