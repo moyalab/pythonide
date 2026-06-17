@@ -249,6 +249,20 @@ NULL_COMMAND_PACKET = [
 끝 바이트(``0x5A``)는 모든 패킷이 공유합니다.
 """
 
+RETURN_TIMEOUT_SEC = 6  # max wait for the 20-byte robot response packet (mode 0x0C/0x01 ACK after move)
+
+DRAW_TIMEOUT_SEC = 60  # draw-shape mode (0x0B) ACKs only after the shape is finished — needs a longer cap
+
+# Precision-control moves (0x0C) ACK only after the move finishes, so the wait is
+# estimated from the command parameters. Over-estimating is safe: __process_return
+# returns the moment the ACK arrives. Tune the per-unit rates to the real robot.
+MOVE_TIMEOUT_MARGIN_SEC = 6     # added to every estimate (round-trip latency + cushion)
+MOVE_TIMEOUT_MIN_SEC = 6        # floor (tiny moves still need round-trip headroom)
+MOVE_TIMEOUT_MAX_SEC = 240      # ceiling guard against absurd cm/step values
+MOVE_SEC_PER_CM = 0.4           # seconds per cm at speed=100 (conservative / slow)
+MOVE_SEC_PER_STEP = 0.02        # seconds per step at speed=100 (conservative / slow)
+MOVE_SEC_PER_DEG = 0.06         # seconds per degree at speed=100 (conservative / slow) — in-place turn
+
 DEFAULT_MOTOR_SPEED = 0x96      # 150
 """모터 명령에서 별도 속도가 주어지지 않을 때 사용할 기본값(0x96 = 150)."""
 
@@ -549,21 +563,51 @@ class KamibotPi:
             cprint(f'Error(KamibotPi): {e}', 'red')
 
 
-    def __process_return(self):
+    def __move_timeout(self, kind, value, speed=100):
+        """완료-게이트 정밀제어 이동의 응답 대기 상한(초)을 파라미터로 추정합니다.
+
+        정밀 제어 모드(0x0C)는 동작 완료 후 ACK를 보내므로, 이 값은 실제 이동
+        시간보다 길기만 하면 됩니다(:meth:`__process_return` 은 ACK 도착 시 즉시
+        리턴). 속도가 낮을수록 오래 걸리므로 시간은 속도에 반비례합니다. 시간 단위
+        이동은 값 자체가 소요 시간이라 정확히 계산되고, cm/step 이동은 보수적으로
+        추정한 뒤 상한 가드를 적용합니다.
+
+        Args:
+            kind (str): 'cm' | 'sec' | 'step' | 'deg'
+            value (int): 이동량(cm / 초 / 스텝 / 회전각).
+            speed (int): 0~100 (``move_step`` / ``move_time`` 은 100 고정).
+
+        Returns:
+            float: 대기 상한(초).
+        """
+        speed = max(int(speed), 1)
+        if kind == 'sec':
+            return max(MOVE_TIMEOUT_MIN_SEC, value + MOVE_TIMEOUT_MARGIN_SEC)
+        if kind == 'cm':
+            dur = value * MOVE_SEC_PER_CM * (100 / speed)
+        elif kind == 'deg':
+            dur = value * MOVE_SEC_PER_DEG * (100 / speed)
+        else:  # 'step'
+            dur = value * MOVE_SEC_PER_STEP * (100 / speed)
+        est = dur + MOVE_TIMEOUT_MARGIN_SEC
+        return max(MOVE_TIMEOUT_MIN_SEC, min(est, MOVE_TIMEOUT_MAX_SEC))
+
+    def __process_return(self, expect_data=False, timeout=RETURN_TIMEOUT_SEC):
         """응답 20바이트를 한 패킷 단위로 받아 내부 상태에 반영합니다.
 
         시리얼에서 데이터가 도착할 때까지 1ms 간격으로 폴링하며 20바이트가
-        모일 때까지 기다립니다. 모이면 :class:`RETURN_PACKET` 인덱스를
-        써서 모드/배터리/센서 값/마지막 명령 인덱스/페이로드를 추출해
-        ``self.__battery``, ``self.__left_object``, ``self.__data0`` …
-        같은 멤버에 채워 둡니다.
+        모일 때까지(또는 ``timeout`` 초 초과 시까지) 기다립니다.
+        모이면 :class:`RETURN_PACKET` 인덱스를 써서 모드/배터리/센서 값/
+        마지막 명령 인덱스/페이로드를 추출해 ``self.__battery``,
+        ``self.__left_object``, ``self.__data0`` … 같은 멤버에 채워 둡니다.
 
-        Note:
-            패킷 길이가 20이 아니면 길이 오류 메시지를 한 줄 출력하고
-            아무 일도 하지 않습니다(예외는 던지지 않습니다).
+        On timeout (robot sent no / a short response): sensor reads
+        (``expect_data=True``) raise :class:`TimeoutError`; control commands
+        (default) print a warning and return ``False`` without updating state.
         """
         data = []
-        while len(data) < 20:
+        deadline = time.time() + timeout
+        while len(data) < 20 and time.time() <= deadline:
             if self.sr.inWaiting():
                 c = self.sr.read()
                 data.append(ord(c))
@@ -593,8 +637,14 @@ class KamibotPi:
                 print(
                     f"leftObj:{self.__left_object}, rightObj:{self.__right_object}, leftLine:{self.__left_line}, centerLine:{self.__center_line}, rightLine:{self.__right_line}")
                 print(f"color:{self.__color}, index:{self.__index}, data0:{self.__data0}, data1:{self.__data1}, data2:{self.__data2}, data3:{self.__data3}, battery:{self.__battery}")
-        else:
-            print(f'Return data error! size={len(data)}')
+            return True
+
+        # timeout / short packet: no full 20-byte response arrived in time
+        msg = f"로봇 응답 시간 초과 (수신 {len(data)}/20 바이트, {timeout}s)"
+        if expect_data:
+            raise TimeoutError(msg)
+        print(msg)
+        return False
 
     # -------------------------------------------------------------------------------------------------------
     #  BLOCK ACTION
@@ -1040,7 +1090,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(timeout=self.__move_timeout('step', max(lstep, rstep), 100))
         return None
 
     def move_time(self,  ldir, lsec, rdir, rsec):
@@ -1088,7 +1138,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(timeout=self.__move_timeout('sec', max(lsec, rsec), 100))
         return None
 
     def move_forward_unit(self,  value=10, opt="-l", speed=50):
@@ -1129,7 +1179,8 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        kind = 'cm' if opt == '-l' else ('sec' if opt == '-t' else 'step')
+        self.__process_return(timeout=self.__move_timeout(kind, value, speed))
         return None
 
     def turn_right_speed(self, value=90, speed=50):
@@ -1169,7 +1220,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(timeout=self.__move_timeout('deg', value, speed))
         return None
 
     def move_right_unit(self, value=10, opt="-l", speed=50):
@@ -1210,7 +1261,8 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        kind = 'cm' if opt == '-l' else ('sec' if opt == '-t' else 'step')
+        self.__process_return(timeout=self.__move_timeout(kind, value, speed))
         return None
 
     def turn_left_speed(self, value=90, speed=50):
@@ -1250,7 +1302,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(timeout=self.__move_timeout('deg', value, speed))
         return None
 
     def move_left_unit(self, value=10, opt="-l", speed=50):
@@ -1291,7 +1343,8 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        kind = 'cm' if opt == '-l' else ('sec' if opt == '-t' else 'step')
+        self.__process_return(timeout=self.__move_timeout(kind, value, speed))
         return None
 
     def move_backward_unit(self, value=10, opt="-l", speed=50):
@@ -1332,7 +1385,8 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        kind = 'cm' if opt == '-l' else ('sec' if opt == '-t' else 'step')
+        self.__process_return(timeout=self.__move_timeout(kind, value, speed))
         return None
 
     def turn_continous(self, dir="l", speed=100):
@@ -1620,7 +1674,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(expect_data=True)
         # print(f"left:{self.__left_object}, right:{self.__right_object}")
         return self.__left_object, self.__right_object
 
@@ -1656,7 +1710,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(expect_data=True)
         # 2022-04-08 left와 right의 방향을 바꾼다.
         # return (self.__left_line, self.__center_line, self.__right_line)
         return (self.__right_line, self.__center_line, self.__left_line)
@@ -1690,7 +1744,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(expect_data=True)
         return self.__color
 
     def get_color_elements(self,  opt=True):
@@ -1721,7 +1775,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(expect_data=True)
         return (self.__data0, self.__data1, self.__data2)
 
     # --------------------------------배터리 값---------------------------------------------
@@ -1748,7 +1802,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(expect_data=True)
         return self.__battery
 
     # ---------------------------------버전 정보 -----------------------------------------------------
@@ -1906,7 +1960,7 @@ class KamibotPi:
             self.sr.flush()
         except Exception as e:
             print('An Exception occurred!', e)
-        self.__process_return()
+        self.__process_return(timeout=DRAW_TIMEOUT_SEC)
         return None
 
     # -----------------------------------멜로디 모드 ----------------------------------------

@@ -1,7 +1,7 @@
 const e=[{id:"setup",title:"1. Setup",description:"Preparing the BitBlock board connection (Web Serial)",icon:"settings",setup:{intro:"This IDE communicates with the BitBlock board over **Web Serial**. No separate driver installation is required — connect the board to your PC as below, then pick the port from the IDE.",steps:["Get the BitBlock board and the USB dongle ready. Make sure batteries are inserted in the board, and turn it on.","Plug the USB dongle into a USB port on the PC.","Bring the BitBlock board close to the dongle, then press the small button on the dongle once to wirelessly pair the board with the dongle.",`Click the "Connect" button at the top right of the IDE; the browser will open the serial port chooser. Select the dongle's port and click "Connect".`,"After connecting, ``Bitblock(port)`` in your code sends commands to that port. The port name (e.g., COM5, /dev/ttyUSB0) can be written directly in the code."],note:"Web Serial only works on Chromium-based browsers (Chrome, Edge, Opera). Safari, Firefox, and Android mobile browsers do not support Web Serial — please use a PC or Chromebook."},notice:"If the board's LED color does not change when you press the dongle button, the board may be powered off, or it may already be paired with a different dongle. Power-cycle the board and press the dongle button just once."},{id:"getting-started",title:"2. Getting started",description:"The most basic commands: connect, disconnect, and wait",icon:"play_circle",entries:[{name:"Bitblock(port)",summary:"Create a BitBlock board object. (The port is not opened yet at this point.)",details:'`Bitblock` is the controller class for handling a single BitBlock board.\nCreating an instance does not open the serial port immediately — it only stores the port info, and the actual connection is started when you call ``connect()``.\n\nArgs:\n  port (str): Serial port name. On Windows like "COM5"; on Linux/Mac like "/dev/ttyUSB0".\n  timeout (float): Maximum time (seconds) to wait for a board response. Default 5.\n  baud (int): Communication speed. Use the firmware default 57600.\n\nBy convention, the variable is named ``bb``, ``board``, or ``bot``. This tutorial uses ``bb`` consistently.',example:`from pycombb import Bitblock
 
 # At this stage the port is not yet open — only "ready to connect".
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 print(bb)`},{name:"bb.connect()",summary:"Open the serial connection to the stored port.",details:`You must call this on the object created by \`\`Bitblock(port)\`\` for communication with the board to start.
 Calling it again after a successful connect is ignored (already open).
 
@@ -10,7 +10,7 @@ Returns:
 
 When connection fails, common causes are 1) wrong port name, 2) another program is holding the same port, 3) the dongle is not paired with the board. Re-check the steps in the Setup topic.`,example:`from pycombb import Bitblock
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 
 ok = bb.connect()
 print("connection result:", ok)`},{name:"bb.disconnect()",summary:"Safely close the open serial connection.",details:`Call it at the end of the program so another program can pick up the same port.
@@ -21,7 +21,7 @@ Returns:
 
 Wrapping it in a try/finally pattern guarantees the port is closed even if an error occurs in the middle.`,example:`from pycombb import Bitblock
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -30,7 +30,7 @@ try:
 finally:
     bb.disconnect()`},{name:"delay(sec)",summary:"Pause the program for the given number of seconds.",details:"Internally calls ``time.sleep``. To wait for less than a second, use a decimal like 0.5.\nImport the function with ``from pycombb.bitblock import delay``, or after a star import (``from pycombb.bitblock import *``) just call ``delay(...)``.\n\nArgs:\n  sec (float): Wait time in seconds.\nReturns:\n  None",example:`from pycombb import Bitblock, delay
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 print("waiting 1 second...")
@@ -44,7 +44,7 @@ Args:
 Returns:
   None`,example:`from pycombb import Bitblock, delayms
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 for i in range(3):
@@ -53,7 +53,7 @@ for i in range(3):
 
 bb.disconnect()`},{name:"wait(ms)",summary:"Waits in milliseconds, just like delayms.",details:"A name commonly used in BitBlock wiki examples. The same behavior is exposed under the name ``wait`` to match the interface of other board libraries. Behavior is exactly the same as ``delayms`` — use whichever you prefer.\n\nArgs:\n  ms (float): Wait time in milliseconds.\nReturns:\n  None",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 print("waiting 1 second...")
@@ -62,7 +62,7 @@ print("done")
 
 bb.disconnect()`},{name:"End-to-end example",summary:"The smallest possible code: connect → brief wait → disconnect.",details:"BitBlock code almost always follows these 4 steps:\n  1) Create the object with ``Bitblock(port)``\n  2) Open the port with ``bb.connect()``\n  3) Main work (turn on LEDs, beep the buzzer, read sensors, etc.)\n  4) Close the port with ``bb.disconnect()``\n\nMemorize this shape and you can follow examples from the rest of the topics directly.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Main-work spot. From the next topic, LED/buzzer code goes here.
@@ -70,7 +70,7 @@ wait(500)
 
 bb.disconnect()`}]},{id:"display-basic",title:"3. LED display — basics",description:"Fill the 5x5 matrix with one color, one letter, or one digit",icon:"grid_on",entries:[{name:"Color formats (concept)",summary:"BitBlock accepts colors in three forms — hex string, [R, G, B] list, or COLOR preset.",details:'Almost every display method (``color``, ``symbol``, ``row``, ``char``, ``num``, ``xy``) takes a color as the last argument. Any of these three forms works the same way:\n\n  1) Hex string: ``"#RRGGBB"`` — same notation as web colors. e.g., ``"#ff0000"``.\n  2) [R, G, B] list (or tuple): each channel 0~255. e.g., ``[255, 0, 0]``.\n  3) COLOR constants: frequently used colors with predefined names. ``COLOR.RED``, ``COLOR.BLUE``, etc.\n\nAn invalid format (e.g., ``"red"``, ``[300, 0, 0]``) raises ``ValueError``. See the table at the bottom of this topic for the full COLOR list.',example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # The same red expressed three ways
@@ -81,7 +81,7 @@ bb.display.color(COLOR.RED);   wait(500)
 bb.display.clear()
 bb.disconnect()`},{name:"bb.display.color(color)",summary:"Fill all 25 pixels of the 5x5 LED matrix with the same color.",details:'The simplest display command. Fills the entire matrix with one color.\n\nArgs:\n  color (str | list | tuple): See "Color formats" above.\nReturns:\n  None\n\nTo turn the LEDs off, pass ``"#000000"``, or more concisely call ``bb.display.clear()``.',example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.display.color(COLOR.GREEN)
@@ -92,7 +92,7 @@ bb.display.clear()
 
 bb.disconnect()`},{name:"bb.display.clear()",summary:"Turn off every LED.",details:'Internally equivalent to ``bb.display.color("#000000")``.\nIt is the shortest no-argument form, so call it freely whenever you need to wipe the screen.\n\nReturns:\n  None',example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.display.color(COLOR.RED)
@@ -108,7 +108,7 @@ Returns:
 
 Once set, it persists for subsequent commands. Cycling board power resets it to the default.`,example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.display.bright(30)            # Dim
@@ -129,7 +129,7 @@ Returns:
 
 If you pass two or more letters at once, only the first is shown. To display a word, use a \`\`for\`\` loop with the pattern: show one letter briefly → wait → show the next.`,example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 for letter in "HELLO":
@@ -139,7 +139,7 @@ for letter in "HELLO":
 bb.display.clear()
 bb.disconnect()`},{name:"bb.display.num(digit, color)",summary:"Display a single 0~9 digit on the matrix.",details:"Draws a single digit (0~9). Like letters, the 5x5 font is used.\n\nArgs:\n  digit (int | str): The digit to show. A string is converted with ``int(...)``.\n  color (str | list | tuple): Digit color.\nReturns:\n  None\n\nTwo-digit values cannot be shown at once. To make a countdown, use a ``for`` loop: show one digit → wait → show next digit.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # 5-second countdown
@@ -150,7 +150,7 @@ for i in range(5, 0, -1):
 bb.display.clear()
 bb.disconnect()`},{name:"Combined example — traffic light",summary:"A mini traffic light that loops through red → yellow → green.",details:"You can build a small simulation with just ``color`` / ``clear`` / ``wait``. Use ``while True:`` for an infinite loop and ``Ctrl+C`` to stop.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -171,7 +171,7 @@ Returns:
 
 Out-of-range coordinates lead to undefined firmware behavior — only use values inside \`\`range(5)\`\` or \`\`0 <= n < 5\`\`.`,example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Draw a diagonal
@@ -184,7 +184,7 @@ wait(1500)
 bb.display.clear()
 bb.disconnect()`},{name:"bb.display.row(row, mask, color)",summary:"Light up one row using a 5-bit bit-mask pattern.",details:"Sets the state of all 5 LEDs in one row at once. Each bit corresponds to one pixel: 1 = on, 0 = off.\n\nArgs:\n  row (int): Row index, 0 (top) ~ 4 (bottom).\n  mask (int): 5-bit integer in 0~31. ``0b11111`` lights the whole row; ``0b10001`` lights only the two ends.\n  color (str | list | tuple): Color for the lit pixels.\nReturns:\n  None\n\nThe leftmost bit is the MSB. So ``0b10000`` lights the leftmost pixel of that row.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.display.clear()
@@ -198,7 +198,7 @@ for r in range(5):
 bb.display.clear()
 bb.disconnect()`},{name:"bb.display.symbol(rows, color)",summary:"Draw the entire 5x5 matrix at once using 5 row bit-masks.",details:"Sends a 5x5 bitmap as one packet, instead of calling ``row`` five times. ``rows`` is a length-5 sequence of integers, each one being one row's bit-mask (0~31).\n\nArgs:\n  rows (Sequence[int]): A length-5 list of integers. Each element is one row's 5-bit mask.\n  color (str | list | tuple): Color of the lit pixels.\nReturns:\n  None\n\nDefining the bitmap as a variable makes the code read like a picture — the 1s show exactly where the lit pixels go.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Heart-shaped bitmap
@@ -220,7 +220,7 @@ Args:
 Returns:
   None`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.display.effect(0)   # Rainbow
@@ -236,7 +236,7 @@ bb.disconnect()`}],tables:[{title:"Built-in effect numbers",headers:["Number","E
 Returns:
   None`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.beep()
@@ -245,7 +245,7 @@ bb.beep()
 
 bb.disconnect()`},{name:"bb.note(note, ms)",summary:"Play a single note for ms milliseconds.",details:'The "Do/Re/Mi" you hear is expressed as integer constants like ``NOTE.C4``, ``NOTE.D4``, ``NOTE.E4``. This function takes such an integer and a duration (milliseconds) and plays the buzzer.\n\nArgs:\n  note (int): A note constant like NOTE.C4, NOTE.D4 (integer in 0~85).\n  ms (int): Duration to hold the note (milliseconds). 0~65535.\nReturns:\n  None\n\nThe call returns immediately (non-blocking). If you call the next note right away, the firmware plays them seamlessly — slip a small ``wait`` between notes for an audible separation.',example:`from pycombb import Bitblock, NOTE, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.note(NOTE.C4, 300); wait(350)
@@ -255,7 +255,7 @@ bb.note(NOTE.C5, 600); wait(700)
 
 bb.disconnect()`},{name:"bb.melody(index)",summary:"Play a firmware-built-in melody by number.",details:"Plays a predefined short tune at once. A convenience for cases where you do not want to compose a tune by calling ``note`` repeatedly.\n\nArgs:\n  index (int): 0-based melody number. The number of tunes can vary by firmware build.\nReturns:\n  None\n\nSending the next command before playback ends will cut the tune. If you have nothing to do next, give a long enough ``wait``.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 bb.melody(0)
@@ -263,7 +263,7 @@ wait(5000)         # Wait until the tune finishes
 
 bb.disconnect()`},{name:"Combined example — play a scale",summary:"Build a (note, duration) sequence as a list and play it with a ``for`` loop.",details:"Build a list of ``(note, duration)`` tuples and call ``note`` in order with a ``for`` loop to compose a short tune. Add a ``wait`` of the same length between notes for a natural separation.\n\nThe example below plays a C-major scale Do→Re→Mi→Fa→Sol→La→Ti→Do, going up and then back down.",example:`from pycombb import Bitblock, NOTE, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # C major scale (up and down)
@@ -277,7 +277,7 @@ for n in scale_up + scale_down:
 
 bb.disconnect()`}],tables:[{title:"NOTE constants (octave 4 — starting from middle C)",headers:["Note","Constant","Value"],rows:[["Do (C4)","NOTE.C4","37"],["Do♯ (C#4)","NOTE.CS4","38"],["Re (D4)","NOTE.D4","39"],["Re♯ (D#4)","NOTE.DS4","40"],["Mi (E4)","NOTE.E4","41"],["Fa (F4)","NOTE.F4","42"],["Fa♯ (F#4)","NOTE.FS4","43"],["Sol (G4)","NOTE.G4","44"],["Sol♯ (G#4)","NOTE.GS4","45"],["La (A4)","NOTE.A4","46"],["La♯ (A#4)","NOTE.AS4","47"],["Ti (B4)","NOTE.B4","48"],["Do (C5)","NOTE.C5","49"]],note:"The full range is defined from ``NOTE.B0(=0)`` to ``NOTE.DS8(=85)``. Up an octave is NOTE.C5/D5/E5...; down an octave is NOTE.C3/D3/E3..."}]},{id:"inputs",title:"6. Input sensors",description:"Read button, touch, tilt, light, and microphone",icon:"sensors",entries:[{name:"Sensors are synchronous (concept)",summary:'Sensor methods are "blocking" calls that send a request and wait for the response.',details:'Unlike LED/buzzer commands which only "send", sensor methods (``button``, ``touch``, ``tilt``, ``light``, ``mic``) send a query to the board and wait until a response comes back. So as soon as the call returns, you have the value at that moment in your hands.\n\nTo monitor a sensor continuously, call the method repeatedly inside ``while True:`` and add a small ``wait(20)`` at the end of each iteration so the board is not polled too aggressively.\n\nWhen a response is broken (sequence index mismatch), the method returns ``None``. The safe pattern is to check for ``None`` immediately after receiving the value and skip that iteration.',example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -292,7 +292,7 @@ try:
 finally:
     bb.disconnect()`},{name:"bb.button()",summary:"Tells you whether the body's A and B buttons are pressed.",details:"Reads the current pressed state of buttons A and B printed on the body, simultaneously.\n\nReturns:\n  tuple[bool, bool] | None: ``(A pressed, B pressed)`` as two booleans. ``None`` if the response is broken.\n\nUnpacking into two variables (``a, b = bb.button()``) makes the code easier to read.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -313,7 +313,7 @@ try:
 finally:
     bb.disconnect()`},{name:"bb.touch()",summary:"Tells you whether the three capacitive touch pins P0, P1, P2 are touched.",details:"Reads the three capacitive touch pads on the side of the body simultaneously. A channel becomes ``True`` when a finger contacts it.\n\nReturns:\n  tuple[bool, bool, bool] | None: ``(P0, P1, P2)`` as three booleans. ``None`` if the response is broken.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -332,7 +332,7 @@ try:
 finally:
     bb.disconnect()`},{name:"bb.tilt()",summary:"Tells you which way the body is tilted using the 6-axis IMU.",details:"Returns the tilt the on-board IMU measures, simplified into 4 boolean flags (left / right / forward / backward). Two directions can be ``True`` at the same time (e.g., tilted left + forward).\n\nReturns:\n  tuple[bool, bool, bool, bool] | None: ``(left, right, fwd, back)``. ``None`` if the response is broken.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -357,7 +357,7 @@ Returns:
 
 Comparing the two lets you estimate which side the light comes from (e.g., where a flashlight is pointing).`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -382,7 +382,7 @@ Returns:
 
 Ambient noise often sits around 200~300, so set the threshold by measuring in your actual environment.`,example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 THRESHOLD = 600
@@ -401,7 +401,7 @@ try:
 finally:
     bb.disconnect()`}]},{id:"actuators",title:"7. Outputs — servo and DC motor",description:"Control the on-board servo angle and drive the DC motor with PWM",icon:"tune",entries:[{name:"Pin mapping — bb.pin (concept)",summary:"Pin numbers are typically referred to via instance mappings like ``bb.pin.SERVO`` or ``bb.pin.P0``.",details:"The pin labels printed on the main board (SERVO, DCMOTOR, P0~P12) are different from the actual GPIO numbers. Mappings can change across firmware builds, so user code should prefer the ``pin`` attribute on the ``Bitblock`` instance.\n\ne.g., ``bb.pin.SERVO``, ``bb.pin.DCMOTOR``, ``bb.pin.P0``\n\nThere is also a class-level ``PIN`` constant (``from pycombb.bitblock import PIN``), but it may not auto-track firmware updates — instance mapping is recommended.",example:`from pycombb import Bitblock
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 print("SERVO   ->", bb.pin.SERVO)
@@ -410,7 +410,7 @@ print("P0      ->", bb.pin.P0)
 
 bb.disconnect()`},{name:"bb.servo(pin, angle)",summary:"Rotate a servo to an angle between 0 and 180 degrees.",details:"Controls the main board's built-in servo (``bb.pin.SERVO``) or an external servo plugged into an extension pin with the same method. The firmware picks the right command set based on the pin number.\n\nArgs:\n  pin (int): Servo pin (typically ``bb.pin.SERVO``).\n  angle (int): An integer angle in 0~180. Out-of-range values may be clipped by the firmware, so it is fine to pre-trim with something like ``clamp(value, 0, 180)``.\nReturns:\n  None\n\nJumping the angle suddenly from 0 to 180 strains the servo. For smooth motion, send small steps with ``wait`` between them in a ``for`` loop.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Slow 0 → 180 → 0 sweep
@@ -424,7 +424,7 @@ for angle in range(180, -1, -10):
 
 bb.disconnect()`},{name:"bb.dcmotor(pin, value)",summary:"Set the DC motor speed as a PWM value in 0~1023.",details:"A DC motor's speed is proportional to the duty cycle of its PWM signal. The larger ``value`` is, the faster it spins.\n\nArgs:\n  pin (int): The pin the motor is connected to (typically ``bb.pin.DCMOTOR`` or an external PWM pin).\n  value (int): An integer in 0 (stop) ~ 1023 (max speed).\nReturns:\n  None\n\nInternally uses the same ANALOG output packet as ``analog_write``. If the driver is single-direction only, you need an H-bridge or similar circuit to spin the other way.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Slowly accelerate, then stop
@@ -441,7 +441,7 @@ Args:
 Returns:
   None`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Blink an external LED (LED on P0)
@@ -451,7 +451,7 @@ for _ in range(5):
 
 bb.disconnect()`},{name:"bb.digital_read(pin)",summary:"Read the current level of a digital pin in pull-up mode (0 or 1).",details:"Reads the current level with the pin configured in pull-up mode. With an external push-button wired to GND, you read ``1`` when not pressed and ``0`` when pressed (pull-up behavior).\n\nArgs:\n  pin (int): Pin number.\nReturns:\n  int | None: ``0`` or ``1``. ``None`` if the response is broken.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -476,7 +476,7 @@ Returns:
 
 Internally identical to \`\`bb.dcmotor\`\`. For readability, use the two names according to intent.`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Fade-in an external LED
@@ -491,7 +491,7 @@ for v in range(1023, -1, -32):
 
 bb.disconnect()`},{name:"bb.analog_read(pin)",summary:"Read the analog input value of a pin as an integer in 0~1023.",details:"Use this for sensors with continuously varying values: potentiometers, CDS (light), soil-moisture, etc.\n\nArgs:\n  pin (int): Input pin.\nReturns:\n  int | None: integer 0~1023. ``None`` if the response is broken.\n\nTo convert to an intuitive range like 0~100, map with something like ``int(v / 1023 * 100)``.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -514,7 +514,7 @@ Returns:
 
 The sensor field of view is narrow and the typical range is 2cm ~ 200cm. Too close or too far adds noise, so threshold-based decisions (e.g., warn if under 30cm) are appropriate.`,example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -534,7 +534,7 @@ try:
 finally:
     bb.disconnect()`},{name:"bb.dht11(pin)",summary:"Read temperature (°C) and humidity (%) from a DHT11 sensor in one call.",details:"DHT11 is an inexpensive 1-wire temperature/humidity sensor. One read returns both values at once, so they are not requested separately.\n\nArgs:\n  pin (int): Pin connected to the data line.\nReturns:\n  tuple[int, int] | None: ``(temp, humi)`` integers. ``None`` if the response is broken.\n\nDHT11 responds slowly. About once per second is appropriate; calling it too quickly may return the previous reading.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -549,7 +549,7 @@ try:
 finally:
     bb.disconnect()`}]},{id:"rccar",title:"9. BB-Car (RC car)",description:"BB-Car driving, turning, distance, line tracing",icon:"directions_car",entries:[{name:"bb.rccar_init() (concept)",summary:"Initialize BB-Car mode and get back an ``RCCar`` controller for driving commands.",details:"BB-Car is a driving module built by inserting the BitBlock body into a chassis. From the body's perspective, two wheels and line, distance, and rear servo sensors are added.\n\nDriving commands are NOT called on the ``Bitblock`` object directly — they are called on the separate controller (typically the ``car`` variable) returned by ``rccar_init()``.\n  ``bb`` ─ the body (LED, buzzer, body sensors)\n  ``car`` ─ the chassis (wheels, line sensor, distance sensor, rear servo)\n\nReturns:\n  Bitblock.RCCar: The BB-Car mode controller.\n\nPutting ``car.stop()`` in a ``finally:`` block guarantees the motors stop even if an error breaks out of the code, preventing the car from rolling off the desk.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -566,7 +566,7 @@ Returns:
 
 Speeds around 100~150 are good for desktop demos. Too high causes the car to slide on stop.`,example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -579,7 +579,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.turn_left(speed) / turn_right(speed)",summary:"Turn while driving — slow one wheel by half to follow a curve.",details:"Both wheels still go forward, but one is slower so the car follows a natural arc. The turning radius grows with ``speed``.\n\nArgs:\n  speed (int): Reference speed (0~255). The inner wheel is automatically set to ``speed/2``.\nReturns:\n  None",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -592,7 +592,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.pivot_left(speed) / pivot_right(speed)",summary:"Pivot in place (one wheel forward + the other backward).",details:"One wheel goes forward and the other backward, so the body spins almost in place. Useful for changing direction in a tight space or making a 90° turn.\n\nArgs:\n  speed (int): Rotation speed (0~255). Default 100.\nReturns:\n  None\n\nCalibrate ``speed`` and ``wait`` time experimentally for 90° / 180° turns (e.g., ``pivot_left(120)`` + ``wait(450)``).",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -606,7 +606,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.wheels(left, right)",summary:"Set left/right wheel speeds directly with signed values.",details:"A negative speed reverses that wheel. Make one negative for behavior similar to ``pivot_*``; tune the difference between the two values for a finer arc than ``turn_*``.\n\nArgs:\n  left (int): Left wheel speed. -255~255.\n  right (int): Right wheel speed. -255~255.\nReturns:\n  None\n\nThe most flexible command for crafting a specific curve radius.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -619,7 +619,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.stop()",summary:"Stop both wheels immediately.",details:"Always end driving with ``stop()``. If the program ends with the last command being ``move_forward``, the motors may keep running.\n\nReturns:\n  None\n\nIn Pyodide, even forcefully stopping the code can leave the serial port alive briefly, so it is safest to guarantee ``stop()`` with a ``try/finally`` block.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -630,7 +630,7 @@ finally:
     car.stop()       # Always stop, no matter how we exit
     bb.disconnect()`},{name:"car.distance()",summary:"Measure the distance to an obstacle in front using BB-Car's ultrasonic sensor (cm).",details:"Reads the ultrasonic sensor on the front of the chassis. Similar to the body method ``bb.ultrasonic``, but you do not specify pins — the firmware automatically uses the standard RC car pins (P7/P9).\n\nReturns:\n  int | None: Front distance (cm). ``None`` if the response is broken.\n\nAbout every 100ms is usually enough. Calling too often can produce jittery values from acoustic interference.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -649,7 +649,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.line()",summary:"Read the bottom 3-channel line sensor as (left, center, right).",details:"Reads three IR sensors on the underside of the chassis at once. A common assumption is that values drop on dark lines.\n\nReturns:\n  tuple[int, int, int] | None: ``(L, C, R)`` integers. ``None`` if the response is broken.\n\nSensor values and threshold depend on floor color and lighting. In your environment, place the car on/off the line and ``print(car.line())`` to find the values, then choose a midpoint as your threshold.",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -680,7 +680,7 @@ finally:
     car.stop()
     bb.disconnect()`},{name:"car.servo(pin, angle)",summary:"Rotate a servo connected to BB-Car's rear connector.",details:"Sets the angle of a servo plugged into the rear P3 (or P4) connector of the chassis. The angle is auto-corrected internally with ``clamp(value, 0, 180)``, so out-of-range values are safe.\n\nArgs:\n  pin (int): Servo pin. Typically ``bb.pin.P3`` or ``bb.pin.P4``.\n  angle (int): Angle in 0~180 (auto-clamped if out of range).\nReturns:\n  None",example:`from pycombb import Bitblock, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -694,7 +694,7 @@ finally:
     bb.disconnect()`}]},{id:"advanced",title:"10. Advanced — threading and AI integration",description:"Background threads + integrating BitBlock with HelloAI hand recognition",icon:"psychology",entries:[{name:"Why threads (concept)",summary:"Sensor polling and AI inference take time — separating them from the main flow keeps the board responsive.",details:"Up to now, BitBlock code was a single flow that ran one line at a time.\n\nThe problem is that when slow work like camera frame processing, hand/face recognition, or external data reception steps in, LEDs, buzzer, and motors all stall during it. By running board operations and AI inference in separate threads, you can pass results through shared variables and the board can react at its own pace.\n\n``threading.Thread`` works fine in Pyodide. The catch: all serial commands should be called from a single thread. Methods that wait for a board response (``button``, ``touch``, ``ultrasonic``, etc.) get tangled with another thread's commands and produce ``WRONG_PACKET_INDEX`` errors.\n\nRecommended pattern: run AI inference in a background thread that writes to a shared variable. The main thread only reads that variable to control the board.",example:`import threading
 from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 state = {"active": True, "value": 0}
@@ -724,7 +724,7 @@ from pycombb import Bitblock, COLOR, wait
 
 # from helloai import Camera, Hand   # Uncomment for actual use
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 shared = {"running": True, "fingers": 0}
@@ -756,7 +756,7 @@ finally:
     bb.display.clear()
     bb.disconnect()`},{name:"Auto-stop — combined distance + line control",summary:"Watch BB-Car's distance and line sensors at the same time, and reflect the state on the body LED.",details:"Watching two sensors together is just two calls inside ``while True:``. But each call waits for a response, so one cycle gets long. If too slow, reduce one polling rate (e.g., distance every 100ms, line every 30ms), or only update the LED on big changes to reduce communication load.\n\nThe example below follows a line, but stops immediately and turns the LED red when an obstacle enters within 15cm.",example:`from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 
@@ -809,7 +809,7 @@ finally:
     bb.disconnect()`}]},{id:"virtual-keyboard",title:"11. Virtual Keyboard — drive BitBlock from the IDE keys",description:"Use the VirtualKeyboard module to read key input and control LEDs, buzzer, and the RC car in real time",icon:"keyboard",entries:[{name:"VirtualKeyboard module (concept)",summary:"Read the toolbar virtual keyboard synchronously and pair it with BitBlock actions.",details:'Pressing the keyboard icon in the IDE toolbar pops up a small virtual keyboard window. Buttons on that window (or the real keyboard while that window is focused) push key codes into the ``VirtualKeyboard`` module.\n\nThe use case is simple — receive key input from inside your BitBlock code to switch LED colors, drive the RC car, sound the buzzer, etc. for **real-time control**. Unlike ``input()`` which waits for a whole line and Enter, ``VirtualKeyboard`` delivers keys **one at a time** as they happen.\n\nKey points:\n  • Import with ``import VirtualKeyboard as kb`` (``kb`` is the conventional alias).\n  • There is only one function — ``kb.wait_key(ms)``. It waits up to ``ms`` milliseconds and returns ``-1`` if no key arrived.\n  • Letters/digits use lowercase ASCII codes; ESC/Enter/Space use the standard ASCII codes; arrows use custom codes in ``0x80~0x83``.\n  • Uses a queue **independent of** ``cv2.waitKey()``, so input never gets tangled even when an imshow window is open.\n\nThink of it as a "PC keyboard input" channel you can use the same way as ``button()`` / ``touch()`` on BitBlock.',example:`import VirtualKeyboard as kb
 from pycombb import Bitblock
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Open the virtual keyboard window from the toolbar icon first.
@@ -825,7 +825,7 @@ finally:
     bb.disconnect()`},{name:"kb.wait_key(ms)",summary:"Wait for the next single key. Returns ``-1`` if nothing arrived within ``ms``.",details:"Args:\n  ms (int): wait time in milliseconds. ``0`` or less means **block forever** until a key arrives.\nReturns:\n  int: the pressed key code, or ``-1`` on timeout.\n\nTwo usage patterns:\n\n  1) **Blocking mode** (``ms=0``): the call stalls until a key arrives. Clean for menu-style code that only needs one key at a time.\n  2) **Non-blocking mode** (small positive ``ms``, e.g. ``20``): wait briefly and return ``-1`` if nothing arrived. Use this when a game loop needs to refresh LEDs/motors independent of key input.",example:`import VirtualKeyboard as kb
 from pycombb import Bitblock, COLOR, wait
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 try:
@@ -846,7 +846,7 @@ finally:
     bb.disconnect()`},{name:"Key-code constants",summary:"Letters are lowercase ASCII; special keys use module constants for readability.",details:'Rather than memorising numeric codes, compare with the constants exposed on the module — e.g. ``kb.ESC``.\n\nLetters / digits (lowercase ASCII):\n  ``kb.A`` – ``kb.Z``        = letters (`ord("a")` – `ord("z")`)\n  ``kb.NUM_0`` – ``kb.NUM_9`` = digits (`ord("0")` – `ord("9")`)\n\nControl / common keys (standard ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\nArrows (custom codes in 0x80+ to avoid colliding with printable ASCII):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\nNote: letter constants are all **lowercase** codes. The virtual keyboard does not carry Shift state, so ``kb.A`` is enough; ``ord("a")`` works identically if you prefer a literal.',example:`import VirtualKeyboard as kb
 from pycombb import Bitblock, COLOR
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 # Map common keys to colors
@@ -871,7 +871,7 @@ finally:
     bb.disconnect()`},{name:"Example: draw on the LEDs with arrow keys",summary:"Move a cursor with the arrows and stamp a pixel with SPACE on the 5x5 LED matrix.",details:'The strength of the virtual keyboard is that "one key = one action" reflects on the BitBlock instantly. The example below places a cursor on the 5x5 LEDs and:\n  • arrows → move the cursor\n  • SPACE  → turn on the current cell\n  • C      → clear everything\n  • ESC    → quit\n\nTwo implementation tricks. First, the cursor position is kept in ``(cx, cy)``. Second, on every key press the screen is cleared and the "lit pixels" plus the "cursor" are drawn again (the simplest form of double buffering). Using a different color for the cursor makes its location obvious at a glance.\n\nWe used ``kb.wait_key(0)`` in blocking mode — the LEDs never flicker between key presses, and they update only on the moment a key is pressed, which feels very smooth.',example:`import VirtualKeyboard as kb
 from pycombb import Bitblock, COLOR
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 
 W, H = 5, 5
@@ -905,7 +905,7 @@ finally:
     bb.disconnect()`},{name:"Example: drive the RC car with WASD",summary:"Drive BB-Car from the PC keyboard in real time. The car moves only while keys keep coming.",details:'For an RC car, "moves while a key is held, stops when released" feels natural. Since the virtual keyboard only delivers events one key at a time, the pattern is **start as soon as a key arrives → auto-stop a short time later**. Too short feels jittery, too long feels sluggish — somewhere around 200–300ms is comfortable.\n\nThe key dial is the ``ms`` argument of ``kb.wait_key(ms)``. A small value (e.g. 30ms) keeps the cycle fast so the car reacts immediately, and when no key arrives the code falls through to auto-stop.\n\nKey mapping:\n  • W / S          : forward / backward\n  • A / D          : pivot left / pivot right\n  • SPACE          : immediate stop\n  • 1 / 2 / 3      : speed 80 / 130 / 200\n  • ESC            : quit\n\nAlways call ``car.stop()`` in the ``finally:`` block. Even when an exception or ESC quits the program, the car will not roll away.',example:`import VirtualKeyboard as kb
 from pycombb import Bitblock
 
-bb = Bitblock()
+bb = Bitblock("COM85")  # example port
 bb.connect()
 car = bb.rccar_init()
 

@@ -1,12 +1,12 @@
 const e=[{id:"setup",title:"1. Setup",description:"USB dongle driver installation guide",icon:"settings",setup:{intro:"To connect KAMIBOT to a PC over a serial port, you must first install the **USB dongle driver**. Follow the steps below to install it.",steps:['Click the "Download driver" button below to download the installer (CDM21228_Setup.zip), then unzip it.',"Run CDM21228_Setup.exe inside the unzipped folder and follow the prompts to install the driver. A PC reboot may be required.","After installation, plug the USB dongle into your PC and turn on the KAMIBOT robot to connect."],note:"If the port is still not recognized after installation, reboot the PC or try a different USB port.",download:{href:"/drivers/CDM21228_Setup.zip",filename:"CDM21228_Setup.zip",label:"Download driver (CDM21228_Setup.zip)"},pairing:{title:"Pairing the dongle and the robot",intro:"Once the driver is installed, pair the KAMIBOT robot and the USB dongle (KAMIBOT dongle) with the following hardware steps.",steps:["Have the KAMIBOT robot and the KAMIBOT dongle ready.","Turn on the KAMIBOT robot. Its LED will turn on and cycle through several colors.","Plug the KAMIBOT dongle into a USB port on the PC, and bring the KAMIBOT robot as close to the dongle as possible. (The robot closest to the dongle will be paired.)","Press the button on the KAMIBOT dongle.","When the KAMIBOT robot LED turns blue, the hardware connection is complete."]}},notice:"This service (Python IDE for KAMIBOT) works on PCs and Chromebooks (Chrome OS). It does not work on Android tablets or Android phones."},{id:"getting-started",title:"2. Getting started",description:"The most basic commands: connect, close, and wait",icon:"play_circle",entries:[{name:"KamibotPi(port)",summary:"Open a serial port to the KAMIBOT robot and create a controller object.",details:'`KamibotPi` is the main SDK class for handling a single KAMIBOT robot.\nThe serial port opens the moment you create the instance, and from then on every command is sent as ``bot.xxx(...)``.\n\nArgs:\n  port (str): Serial port name. On Windows it looks like ``"COM5"``; on Linux/Mac like ``"/dev/ttyUSB0"``. If ``None``, the program exits immediately.\n  baud (int): Communication speed. Use the firmware default ``57600``.\n  timeout (int | float): Response timeout (seconds). Default ``2``.\n  verbose (bool): When ``True``, prints debug messages on every command. Default ``False``.\n\nBy convention, the variable is named ``bot``. If you plan to play melodies, also import the ``Note`` constants for convenience.',example:`from pibot import KamibotPi
 
 # Open the serial port and connect to KAMIBOT
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 print(bot)
 
 bot.close()`},{name:"bot.close()",summary:"Clean up the serial port and exit the process.",details:"If the port is open, it is flushed and closed, then the process is ended with ``sys.exit(0)``.\nCalling it at the end of your program lets the next program reopen the same port.\n\nReturns:\n  None\n\nIf you want to close the port without exiting, use ``bot.disconnect()``.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Main work (LED, motors, sensors, etc.)
 bot.beep(0.3)
@@ -17,7 +17,7 @@ bot.close()`},{name:"bot.init()",summary:"Reset KAMIBOT's internal state to its 
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Reset to a clean state after running various commands
 bot.turn_led(255, 0, 0)
@@ -26,7 +26,7 @@ bot.init()
 
 bot.close()`},{name:"bot.delay(sec)",summary:"Pause the program for the given number of seconds.",details:"Internally calls ``time.sleep``. To wait for less than a second, use a decimal like ``0.5``.\n\nArgs:\n  sec (float): Wait time in seconds.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_led(0, 255, 0)   # Turn on the green LED
 bot.delay(1.5)            # Hold for 1.5 seconds
@@ -40,7 +40,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 for i in range(3):
     bot.beep(0.05)
@@ -48,7 +48,7 @@ for i in range(3):
 
 bot.close()`},{name:"bot.wait(ms)",summary:"Waits in milliseconds, just like delayms.",details:"To match the interface of other board libraries, the same behavior is also exposed under the name ``wait``. Behavior is identical to ``delayms`` — use whichever you prefer.\n\nArgs:\n  ms (int | float): Wait time in milliseconds.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_led(0, 0, 255)   # Blue LED
 bot.wait(800)             # Wait 0.8 seconds
@@ -56,7 +56,7 @@ bot.turn_led(0, 0, 0)
 
 bot.close()`},{name:"bot.stop()",summary:"Immediately stops a moving KAMIBOT.",details:"Commands like ``go_forward_speed`` and ``go_backward_speed`` keep rolling until you call ``stop``. After moving for the desired duration, you must turn the motors off with ``stop()``.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Roll both wheels and stop after 2 seconds
 bot.go_forward_speed(80, 80)
@@ -65,7 +65,7 @@ bot.stop()
 
 bot.close()`}]},{id:"sound",title:"3. Sound",description:"Beeps and musical notes",icon:"music_note",entries:[{name:"bot.beep(sec=0.2)",summary:'Play a short "beep". You can specify the duration in seconds.',details:"Internally plays note 60 (C4, middle C) as a ``melody`` for ``sec`` seconds.\nIt is the easiest way to give a quick signal — for example, an action notice or a button-press feedback.\n\nArgs:\n  sec (float): Play duration in seconds. Defaults to 0.2 if omitted. Range 0.1 to 25.5.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Beep three times with different lengths
 bot.beep()       # 0.2 seconds (default)
@@ -76,7 +76,7 @@ bot.beep(0.5)    # 0.5 seconds
 
 bot.close()`},{name:"bot.melody(scale, sec)",summary:"Play the given note for the given duration.",details:"Plays a single note through the buzzer for ``sec`` seconds. ``scale`` can be an integer (0~83) or a constant like ``Note.C4``.\nCall it several times to build a short melody.\n\nArgs:\n  scale (int): Note (0 ~ 83). Constants like ``Note.C4`` also work.\n  sec (float): Play duration in seconds.\n\nReturns:\n  None",example:`from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # C - E - G (C major arpeggio)
 bot.melody(Note.C4, 0.4)
@@ -90,7 +90,7 @@ It is a great first example for getting comfortable with the melody function and
 [1] from pibot import KamibotPi, Note
    Import KAMIBOT and the Note scale constants together.
 
-[2] bot = KamibotPi()
+[2] bot = KamibotPi("COM85")
    Create the KAMIBOT object.
 
 [4–6] HI, LO, T
@@ -106,7 +106,7 @@ It is a great first example for getting comfortable with the melody function and
    Close the serial port and exit.`,code:`# Import the KAMIBOT driver and the Note constants table.
 from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Police siren: alternate two notes quickly ("wee-woo wee-woo").
 # A short note length and a perfect-fourth interval feel bright and urgent.
@@ -126,7 +126,7 @@ Notice that with the same pattern, just changing the duration of one note (T) an
 [1] from pibot import KamibotPi, Note
    Import KAMIBOT and the Note constants together.
 
-[2] bot = KamibotPi()
+[2] bot = KamibotPi("COM85")
    Create the KAMIBOT object.
 
 [4–6] HI, LO, T
@@ -143,7 +143,7 @@ Notice that with the same pattern, just changing the duration of one note (T) an
 ※ Comparison: police siren uses T=0.3 (fast); ambulance uses T=0.9 (slow). The same "two-note alternation" pattern becomes a totally different siren just by changing the timing.`,code:`# Import the KAMIBOT driver and the Note constants table.
 from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Ambulance siren: alternate two notes slowly ("nee-naw nee-naw").
 # Notes are longer than the police siren — calmer, but still urgent.
@@ -161,7 +161,7 @@ bot.close()`}},{name:'Example: play "Für Elise"',summary:`The opening 4 bars + 
 [1] from pibot import KamibotPi, Note
    Import the KamibotPi class that controls KAMIBOT, together with the Note class that bundles all the scale constants.
 
-[2] bot = KamibotPi()
+[2] bot = KamibotPi("COM85")
    Create the KAMIBOT object. From here on, every command is invoked as bot.xxx().
 
 [3] S = 0.2   # 16th note
@@ -203,7 +203,7 @@ bot.close()`}},{name:'Example: play "Für Elise"',summary:`The opening 4 bars + 
 from pibot import KamibotPi, Note
 
 # Create the KAMIBOT object. Every command below is sent through this 'bot'.
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # 3/8 time. The base unit is the 16th note.
 # Two 16th notes (S) make one 8th note (EE).
@@ -274,7 +274,7 @@ Bar layout (8 bars total):
 
 The score list is a sequence of (note, duration) tuples. When the note is None, it is treated as a rest and bot.delay(duration) is called.`,code:`from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Note durations (seconds) — moderate tempo
 Q = 0.4    # quarter note
@@ -328,7 +328,7 @@ Returns:
 
 If you only need the 9 predefined colors, \`\`turn_led_idx\`\` or the \`\`LED\`\` dict is shorter.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Red → Green → Blue → White
 bot.turn_led(255, 0, 0)
@@ -349,7 +349,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Cycle through indexes 0 to 7
 for idx in range(8):
@@ -359,7 +359,7 @@ for idx in range(8):
 bot.turn_led(0, 0, 0)   # Off
 bot.close()`,table:{headers:["idx","Color","RGB"],rows:[["0","red","[255, 0, 0]"],["1","orange","[255, 165, 0]"],["2","yellow","[255, 255, 0]"],["3","green","[0, 255, 0]"],["4","blue","[0, 0, 255]"],["5","skyblue","[0, 255, 255]"],["6","purple","[128, 0, 128]"],["7","white","[255, 255, 255]"]]}},{name:"LED (module constant)",summary:"A dict mapping color names to RGB lists. Pull a color out by its key and unpack it into ``turn_led``.",details:'A dictionary of RGB lists for the 9 predefined colors in the pibot module.\nTo pass it directly as function arguments, unpack like ``*LED["red"]``, or unpack into variables: ``r, g, b = LED["green"]``.\n\nKeys:\n  ``"off"``, ``"red"``, ``"orange"``, ``"yellow"``, ``"green"``, ``"blue"``, ``"skyblue"``, ``"purple"``, ``"white"``\n\nIf you want to iterate by index 0~8, use the ``LED_COLOR`` list (indexes 0~8) which holds the same data.',example:`from pibot import KamibotPi, LED
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Pull colors out by key name
 bot.turn_led(*LED["red"])
@@ -400,7 +400,7 @@ def send(bot, pattern):
     bot.delay(UNIT * 2)  # Extend symbol gap (1) to letter gap (3)
 
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 try:
     for _ in range(3):
@@ -412,7 +412,7 @@ finally:
     bot.turn_led(*OFF)
     bot.close()`}]},{id:"speed-control",title:"5. Speed control",description:"Set the two wheel speeds (0~100) directly to drive straight, curve, or spin in place",icon:"speed",entries:[{name:"bot.go_forward_speed(lspeed, rspeed)",summary:"Drive forward with the two given wheel speeds. Keeps moving until stopped.",details:'Drives the left and right wheels forward at the given speeds. Equal speeds go straight; if one is faster, the robot curves toward the slower side.\nThis function only "turns the motors on" — wait the desired time with ``delay`` and then turn them off with ``stop()``.\n\nArgs:\n  lspeed (int): Left wheel speed. 0 ~ 100.\n  rspeed (int): Right wheel speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.go_forward_speed(80, 80)   # Same speed → straight ahead
 bot.delay(2)
@@ -420,7 +420,7 @@ bot.stop()
 
 bot.close()`},{name:"bot.go_backward_speed(lspeed, rspeed)",summary:"Drive backward with the two given wheel speeds.",details:"The reverse version of ``go_forward_speed``. The pattern (start rolling → wait → ``stop()``) is the same.\n\nArgs:\n  lspeed (int): Left wheel speed. 0 ~ 100.\n  rspeed (int): Right wheel speed. 0 ~ 100.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.go_backward_speed(80, 80)
 bot.delay(1.5)
@@ -434,7 +434,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.go_left_speed(80)
 bot.delay(1.5)
@@ -448,7 +448,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.go_right_speed(80)
 bot.delay(1.5)
@@ -456,7 +456,7 @@ bot.stop()
 
 bot.close()`},{name:"bot.go_dir_speed(ldir, lspeed, rdir, rspeed)",summary:"Set each wheel's direction and speed independently — the most flexible speed command.",details:'Set the "forward/backward" direction and speed for each wheel separately. Spinning both wheels in opposite directions at the same speed gives an in-place rotation.\n\nArgs:\n  ldir (str): Left wheel direction. ``"f"`` forward / ``"b"`` backward.\n  lspeed (int): Left wheel speed. 0 ~ 100.\n  rdir (str): Right wheel direction. ``"f"`` / ``"b"``.\n  rspeed (int): Right wheel speed. 0 ~ 100.\n\nReturns:\n  None\n\nIn-place clockwise rotation = left ``"f"``, right ``"b"`` (same speed).',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Spin clockwise in place
 bot.go_dir_speed("f", 80, "b", 80)
@@ -468,7 +468,7 @@ bot.close()`}],entriesAfter:[{name:"Example: forward 2 seconds",summary:"Drive b
 [1] from pibot import KamibotPi
    Import the KAMIBOT class.
 
-[2] bot = KamibotPi()
+[2] bot = KamibotPi("COM85")
    Create the KAMIBOT object.
 
 [4] bot.go_forward_speed(100, 100)
@@ -483,7 +483,7 @@ bot.close()`}],entriesAfter:[{name:"Example: forward 2 seconds",summary:"Drive b
 [7] bot.close()
    Close the serial port and exit.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Drive both wheels at the same speed for a straight run.
 # go_forward_speed only turns the motors on — they keep going until stop().
@@ -503,7 +503,7 @@ See for yourself how changing one word changes the behavior.
 [6] bot.stop()
    Stop both motors.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Same pattern as the "forward 2 seconds" example,
 # only the command changes from go_forward_speed to go_backward_speed.
@@ -525,7 +525,7 @@ bot.close()`},{name:"Example: spin in place",summary:"Drive the left wheel forwa
 
 ※ To rotate the other way, swap ldir and rdir (e.g., "b", 100, "f", 100).`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # In-place rotation: left wheel forward, right wheel backward.
 # When the two wheels move at the same speed in opposite directions,
@@ -559,7 +559,7 @@ Alternating the two with a for loop naturally produces an S-shaped path.
 [12] bot.stop()
    When the last curve ends, stop both motors.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # S-curve = repeat "left curve → right curve".
 # go_left_speed curves to the left (drives only one wheel),
@@ -575,26 +575,26 @@ for _ in range(2):
 bot.stop()
 bot.close()`}]},{id:"precision",title:"6. Precision control (cm/sec/step)",description:"Move precisely by specifying a unit (cm, sec, step) or angle",icon:"straighten",entries:[{name:"bot.move_forward_unit(value, opt, speed)",summary:"Move forward precisely by the given unit (cm, sec, step).",details:'Instead of being time-based (``delay``), the firmware guarantees the distance for the given unit. It stops automatically when done — no need to call ``stop()``.\n\nArgs:\n  value (int): The amount to move.\n  opt (str): ``"-l"`` length (cm) / ``"-t"`` time (seconds) / ``"-s"`` step count.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Drive exactly 20cm forward
 bot.move_forward_unit(20, "-l", 50)
 
 bot.close()`},{name:"bot.move_backward_unit(value, opt, speed)",summary:"Move backward precisely by the given unit (cm, sec, step).",details:'The reverse version of ``move_forward_unit``. Stops automatically when done.\n\nArgs:\n  value (int): The amount to move.\n  opt (str): ``"-l"`` cm / ``"-t"`` sec / ``"-s"`` step.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.move_backward_unit(20, "-l", 50)
 
 bot.close()`},{name:"bot.move_left_unit(value, opt, speed)",summary:"Strafe (slide) the body to the left by the given unit.",details:'Drives the wheels in opposite directions so the body slides to the left. This is sideways motion, not rotation.\n\nArgs:\n  value (int): The amount to move.\n  opt (str): ``"-l"`` cm / ``"-t"`` sec / ``"-s"`` step.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.move_left_unit(10, "-l", 50)
 
 bot.close()`},{name:"bot.move_right_unit(value, opt, speed)",summary:"Strafe (slide) the body to the right by the given unit.",details:'The opposite-direction version of ``move_left_unit``.\n\nArgs:\n  value (int): The amount to move.\n  opt (str): ``"-l"`` cm / ``"-t"`` sec / ``"-s"`` step.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.move_right_unit(10, "-l", 50)
 
@@ -607,33 +607,33 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_left_speed(90, 50)   # Left 90°
 
 bot.close()`},{name:"bot.turn_right_speed(value, speed)",summary:"Rotate right in place by the given angle.",details:"The opposite-direction version of ``turn_left_speed``. Often used for drawing shapes — for a regular n-gon, rotate ``360 / n`` degrees at each corner.\n\nArgs:\n  value (int): Rotation angle (degrees).\n  speed (int): Rotation speed. 0 ~ 100.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_right_speed(90, 50)   # Right 90°
 
 bot.close()`},{name:"bot.move_step(ldir, lstep, rdir, rstep)",summary:"Specify direction and step count for each wheel separately — combine curves and rotations freely.",details:'Mix freely — for example, 200 steps forward on one side and 100 steps backward on the other. Same direction and same steps drive straight; one side stepping more curves; opposite directions rotate in place.\n\nArgs:\n  ldir (str): Left wheel direction. ``"f"`` / ``"b"``.\n  lstep (int): Left wheel step count.\n  rdir (str): Right wheel direction. ``"f"`` / ``"b"``.\n  rstep (int): Right wheel step count.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # 200 steps on each side → straight ahead
 bot.move_step("f", 200, "f", 200)
 
 bot.close()`},{name:"bot.move_time(ldir, lsec, rdir, rsec)",summary:"Specify direction and run time (seconds) for each wheel separately.",details:'A time-based version of ``move_step``. Equal times on both sides drive straight or backward; one side longer makes that wheel turn more, producing a curve.\n\nArgs:\n  ldir (str): Left wheel direction. ``"f"`` / ``"b"``.\n  lsec (int | float): Left wheel run time (seconds).\n  rdir (str): Right wheel direction.\n  rsec (int | float): Right wheel run time (seconds).\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Forward 2 seconds on both sides
 bot.move_time("f", 2, "f", 2)
 
 bot.close()`},{name:"bot.turn_continous(dir, speed)",summary:"Rotate in place in the given direction continuously, until stopped.",details:'This command only "turns rotation on" — it keeps spinning until you call ``stop()``. For timed control, combine with ``delay`` + ``stop``.\n\nArgs:\n  dir (str): Direction. ``"l"`` left / ``"r"`` right.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_continous("r", 80)
 bot.delay(2)
@@ -652,7 +652,7 @@ Code flow:
 
 ※ Try it: change 30 to 50 and compare with the actual measured distance. Floor surface can affect the real travel distance slightly.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Move exactly 30 cm forward.
 # "-l" means the value (30) is in centimeters (length).
@@ -679,7 +679,7 @@ Code flow:
   · SIDE = 10 makes a small square; SIDE = 40 makes a big one.
   · What if you change turn_right_speed → turn_left_speed? (counterclockwise)`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 20    # Side length (cm)
 SPEED = 50   # 0 ~ 100
@@ -705,7 +705,7 @@ Only the "rotation angle" and "loop count" change. Compare the two side by side.
   · TURN = 360 // 5, repeat 5 times → regular pentagon
   · TURN = 360 // 6, repeat 6 times → regular hexagon`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 25
 SPEED = 50
@@ -732,7 +732,7 @@ See how varied the shapes get with the same pattern (forward → turn → repeat
   · For a 7-point star, skipping every other point gives a total rotation of 720°, so 720 / 7 ≈ 103°.
   · Too large a SIDE runs out of space! 30~40 cm works well.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 30
 SPEED = 50
@@ -766,7 +766,7 @@ delay(0.5) is a short pause between actions so KAMIBOT clearly receives the next
   · Change (f300, f150) to (f250, f200) and the arc gets larger (less curvature).
   · For a small circle, try repeating (f400, f200) several times.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # move_step(left direction, left steps, right direction, right steps)
 # Three simple rules:
@@ -787,7 +787,7 @@ bot.move_step("f", 200, "b", 200)
 
 bot.close()`}]},{id:"top-motor",title:"7. Top motor",description:"Control angle, time, and rotations of the top stepper motor (e.g., pen holder)",icon:"rotate_right",entries:[{name:"bot.top_motor_degree(dir, value, speed)",summary:"Rotate the top motor by the given angle (relative rotation from the current position).",details:'Rotates the stepper motor on KAMIBOT\'s head "by ``value`` degrees more from where it is now".\nNote: top motor direction is ``"l"/"r"``, unlike wheel direction (``"f"/"b"``).\n\nArgs:\n  dir (str): Rotation direction. ``"l"`` left / ``"r"`` right.\n  value (int): Rotation angle (degrees).\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None\n\nTo go to "exactly N degrees regardless of where you are now", use ``top_motor_abspos``.',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.top_motor_degree("r", 90, 50)   # Right 90°
 bot.delay(0.5)
@@ -803,7 +803,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.top_motor_abspos(180, 50)   # Exactly to 180°
 bot.delay(1)
@@ -811,19 +811,19 @@ bot.top_motor_abspos(0, 50)     # Exactly back to 0°
 
 bot.close()`},{name:"bot.top_motor_time(dir, value, speed)",summary:"Rotate the top motor for the given time (seconds).",details:'Use this to drive by time instead of by angle. Speed and time together determine the amount of rotation.\n\nArgs:\n  dir (str): Direction. ``"l"`` / ``"r"``.\n  value (int | float): Rotation time (seconds).\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.top_motor_time("l", 3, 50)   # Rotate left for 3 seconds
 
 bot.close()`},{name:"bot.top_motor_round(dir, value, speed)",summary:"Rotate the top motor by the given number of full rotations (1 rotation = 360°).",details:'Specify "how many turns" instead of degrees. 1 means one full turn; 2 means two.\n\nArgs:\n  dir (str): Direction. ``"l"`` / ``"r"``.\n  value (int): Number of rotations.\n  speed (int): Speed. 0 ~ 100.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.top_motor_round("r", 1, 50)   # One full turn to the right
 
 bot.close()`},{name:"bot.top_motor_stop()",summary:"Immediately stop a rotating top motor.",details:"Use this to interrupt a pre-set action, like one started with ``top_motor_time``.\n\nReturns:\n  None",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Try a 5-second rotation but force-stop after 1 second
 bot.top_motor_time("r", 5, 50)
@@ -845,7 +845,7 @@ Code flow:
   · Replace 90 with 45 or 180 — the rotation amount changes accordingly.
   · Reduce the speed (50) to 20 to slow down, or raise it to 100 to speed up.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Rotate the top motor 90° to the right (e.g., lift a pen).
 # Args: direction ("r"/"l"), angle (degrees), speed (0-100).
@@ -872,7 +872,7 @@ Code flow:
   · Compare 180 with 90, 270, etc.
   · What happens if you call the same abspos value twice? — the motor barely moves because it is already there.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # abspos = "absolute position" — go to exactly this angle, regardless of where you are now.
 # Different from top_motor_degree, which adds an angle to the current position.
@@ -898,7 +898,7 @@ Code flow:
   · ANGLE = 10 for tiny tremors; ANGLE = 60 for big swings.
   · What if you swap the order to "left → right"? Same motion but starts in the opposite direction.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 ANGLE = 30   # Angle of one swing (degrees)
 TIMES = 5    # Number of left/right round trips
@@ -920,7 +920,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_tri(20)   # 20 cm-side triangle
 
@@ -932,7 +932,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_rect(20)   # 20 cm-side square
 
@@ -944,7 +944,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_penta(20)
 
@@ -956,7 +956,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_hexa(20)
 
@@ -968,7 +968,7 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_star(20)
 
@@ -980,13 +980,13 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_circle(15)   # Circle with 15 cm radius
 
 bot.close()`},{name:'bot.draw_semicircle(len, side="l")',summary:"Draw a semicircle (180° arc). Does NOT return to the starting point.",details:'Draws a left- or right-curving semicircle. Unlike ``draw_circle``, when done KAMIBOT is at the opposite end of the arc — be aware.\nA pattern of "left semicircle → right semicircle" naturally produces an S-curve.\n\nArgs:\n  len (int): Radius (cm).\n  side (str): Curve direction. ``"l"`` left / ``"r"`` right.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # S-curve
 bot.draw_semicircle(15, "l")
@@ -994,7 +994,7 @@ bot.draw_semicircle(15, "r")
 
 bot.close()`},{name:"bot.draw_arc(radius, value, mode=0)",summary:"Draw an arc by time or by angle.",details:'Specify both the radius and "how much" — either as time (seconds) or angle (degrees).\nWhen ``mode=0``, ``value`` is the duration (seconds); when ``mode=1``, it is the central angle (degrees).\n\nArgs:\n  radius (int): Radius (cm).\n  value (int): Time (sec) or angle (deg) depending on mode.\n  mode (int): ``0`` time-based / ``1`` angle-based. Default 0.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.draw_arc(15, 2, 0)    # Radius 15 cm, draw arc for 2 seconds
 bot.delay(0.5)
@@ -1015,7 +1015,7 @@ Code flow:
   · SIDE = 15 makes them small; SIDE = 30 makes them big.
   · Add draw_circle(10) at the end to see "polygon → circle" progression.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 20      # Side length (cm)
 SPEED = 50
@@ -1049,7 +1049,7 @@ Code flow:
   · Set TURN to 60° (6 iterations) or 45° (8 iterations) to control the petal count.
   · Replace draw_rect with draw_tri to get a triangle pinwheel.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 15
 SPEED = 50
@@ -1075,7 +1075,7 @@ Code flow:
   · sizes = [25, 20, 15, 10] reverses the effect for a shrinking series.
   · Replace draw_tri with draw_penta to get a series of four pentagons.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SPEED = 50
 GAP = 30
@@ -1103,7 +1103,7 @@ Code flow:
   · Compare R = 10 vs 20 to see different curvature.
   · Use the same letter ("l", "l", "l") to make a long curve in one direction.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 R = 12          # Same radius for the circle and all semicircles
 SPEED = 50
@@ -1133,7 +1133,7 @@ Code flow:
   · Add turn_right_speed(60, SPEED) each iteration to fan the stars out radially.
   · Replace draw_star with draw_penta for a row of pentagons.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SIDE = 12       # Side length of one star (cm)
 GAP = 25        # Gap between stars
@@ -1147,7 +1147,7 @@ for _ in range(STARS):
 
 bot.close()`}]},{id:"sensors",title:"9. Sensors",description:"Read object, line, and color sensor values — bring KAMIBOT's view of the world into your code",icon:"sensors",entries:[{name:"bot.get_object_detect(opt=True)",summary:"Read both left and right object detection sensors at once and return them as a (left, right) tuple.",details:"Reads both front IR sensors (left and right) at the same time. Each value is an integer; a higher value (or 1) means an object is close.\n\nArgs:\n  opt (bool): When ``True``, leaves motors/LEDs as-is after the read; when ``False``, stops them after the command.\n\nReturns:\n  tuple[int, int]: ``(left, right)`` sensor values.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Read object detection every 0.5 sec for 5 seconds
 for _ in range(10):
@@ -1157,7 +1157,7 @@ for _ in range(10):
 
 bot.close()`},{name:"bot.get_line_sensor(opt=True)",summary:"Read left, center, and right line sensors at once and return as a (left, center, right) tuple.",details:"A sensor over a black line on the floor reads ``1``; over a white floor it reads ``0`` (this may be inverted depending on the board/lighting).\nYou typically compare the three values to decide which side the line is on.\n\nArgs:\n  opt (bool): ``True``/``False`` option (keep running / stop).\n\nReturns:\n  tuple[int, int, int]: ``(left, center, right)``.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Read the line sensor every 0.5 sec for 5 seconds
 for _ in range(10):
@@ -1167,7 +1167,7 @@ for _ in range(10):
 
 bot.close()`},{name:"bot.get_color_sensor(opt=True)",summary:"Read a single color index (int) from the color sensor.",details:"Classifies the color the sensor sees into the same color index used by ``turn_led_idx`` (0=red, 1=orange, … 7=white) and returns one integer.\nFor colors outside the recognizable range, the firmware reports the index of the closest color.\n\nArgs:\n  opt (bool): ``True``/``False`` option.\n\nReturns:\n  int: Color index (0~8).",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Read the paper color 10 times at 1-second intervals
 for _ in range(10):
@@ -1177,7 +1177,7 @@ for _ in range(10):
 
 bot.close()`},{name:"bot.get_color_elements(opt=True)",summary:"Return the RGB the color sensor sees as an (r, g, b) tuple.",details:"Use this when you want raw RGB values instead of a color index. Pass them straight to ``turn_led`` to make the LED mimic what KAMIBOT sees.\n\nArgs:\n  opt (bool): ``True``/``False`` option.\n\nReturns:\n  tuple[int, int, int]: ``(r, g, b)`` per channel, 0~255.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Mirror the sensed color on the LED for 10 seconds
 for _ in range(10):
@@ -1203,7 +1203,7 @@ Code flow:
   · Replace \`or\` with \`and\` to stop only when both sides detect — useful for narrow passages.
   · Reducing \`delay(0.05)\` makes it react faster but uses more CPU.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SPEED = 30   # Slow forward speed (0-100)
 
@@ -1236,7 +1236,7 @@ Code flow:
   · Change \`for _ in range(20)\` to \`while True\` to loop forever.
   · turn_led(r, g, b) → turn_led(g, r, b) swaps red and green for a "color-blind" mode.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 try:
     for _ in range(20):
@@ -1265,7 +1265,7 @@ Code flow:
   · Add more colors — back up on 2(yellow), beep on 6(purple), etc.
   · Make paper traffic-light cards and present them in sequence to make the robot drive a course.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Color index → meaning
 RED, GREEN, BLUE = 0, 3, 4
@@ -1307,7 +1307,7 @@ Control rules:
   · Reduce 15 to 8 for smoother steering, or raise to 30 for sharp corrections.
   · If the black line reads 0 instead of 1, flip the l/c/r comparisons to \`== 0\`.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 STEP = 3      # Distance per loop (cm)
 SPEED = 35
@@ -1348,7 +1348,7 @@ Code flow:
   · Add a random left/right turn after \`move_backward_unit(5, "-l", 40)\` to make a maze-escape robot.
   · Add a beep just before each collision to give a warning.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 SPEED = 35
 TURN = 30        # Avoidance turn angle (degrees)
@@ -1419,7 +1419,7 @@ while True:
     elif right == 1:  # line on the right
         robot.go_forward_speed(80, 30)  # turn right`}]},{id:"misc",title:"10. Line tracer / info",description:"Toggle the line tracer on/off, query battery and firmware version",icon:"route",entries:[{name:"bot.toggle_linetracer(mode, speed=100)",summary:"Turn the firmware-built-in line tracer on or off.",details:"Lets KAMIBOT follow a line using its own firmware logic instead of you reading sensors and branching with if/else. While enabled, line following takes priority over other movement commands.\n\nArgs:\n  mode (bool): ``True`` on / ``False`` off.\n  speed (int): Line tracer speed. Default 100.\n\nReturns:\n  None\n\nIf you want to write your own line-following logic, use ``bot.get_line_sensor()``.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Turn on the line tracer for 5 seconds
 bot.toggle_linetracer(True, 80)
@@ -1432,7 +1432,7 @@ bot.close()`},{name:"bot.get_battery()",summary:"Read and return the current bat
 Returns:
   int: Battery value.`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 level = bot.get_battery()
 print("battery =", level)
@@ -1442,13 +1442,13 @@ bot.close()`},{name:"bot.get_version()",summary:"Request firmware version info o
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.get_version()   # Response is printed to the console
 
 bot.close()`}]},{id:"basic-move",title:"11. Basic movement (map board)",description:"Move and rotate accurately by cells on the map board",icon:"arrow_forward",notice:"This feature requires a dedicated map board.",entries:[{name:'bot.move_forward(value, opt="-l")',summary:"Move forward ``value`` cells on the map board.",details:'Moves KAMIBOT exactly ``value`` cells along the map board grid (line map or block map).\n\nArgs:\n  value (int): Number of cells.\n  opt (str): ``"-l"`` line map / ``"-b"`` block map. Default ``"-l"``.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.move_forward(2)         # 2 cells on the line map
 bot.move_forward(3, "-b")   # 3 cells on the block map
@@ -1461,33 +1461,33 @@ Args:
 Returns:
   None`,example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.move_backward(1)   # Move 1 cell backward on the block map
 
 bot.close()`},{name:'bot.turn_left(value=1, opt="-l")',summary:"Rotate left on the map board.",details:'On the line map only one rotation (90°) is guaranteed and ``value`` is ignored. On the block map, ``value`` cumulative 90° rotations are performed.\n\nArgs:\n  value (int): Number of rotations. Default 1.\n  opt (str): ``"-l"`` line map / ``"-b"`` block map. Default ``"-l"``.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_left()         # Line map 90°
 bot.turn_left(2, "-b")  # Block map 180° (90° × 2)
 
 bot.close()`},{name:'bot.turn_right(value=1, opt="-l")',summary:"Rotate right on the map board.",details:'The opposite direction of ``turn_left``. On the line map ``value`` is ignored; on the block map ``value`` rotations are accumulated.\n\nArgs:\n  value (int): Number of rotations. Default 1.\n  opt (str): ``"-l"`` line map / ``"-b"`` block map. Default ``"-l"``.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_right()
 bot.turn_right(2, "-b")
 
 bot.close()`},{name:'bot.turn_back(value=1, opt="-l")',summary:"Turn around (180°) on the map board.",details:'Half-turn in place. On the line map ``value`` is ignored.\n\nArgs:\n  value (int): Number of rotations. Default 1.\n  opt (str): ``"-l"`` line map / ``"-b"`` block map.\n\nReturns:\n  None',example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 bot.turn_back()
 
 bot.close()`}]},{id:"utils",title:"12. Utilities / constants",description:"Helper functions like sensor value mapping or angle calculation, and module constants",icon:"functions",entries:[{name:"bot.remap(value, source_range, target_range)",summary:"Map a value from one range to another with the same proportion — useful for unit conversion of sensor values.",details:"Use this when you need a linear proportional conversion, like turning sensor input (e.g., 0~1023) into a motor speed (e.g., 0~100).\n\nArgs:\n  value (float | int): The original value to convert.\n  source_range (tuple[float, float]): The original range ``(s0, s1)`` that ``value`` belongs to.\n  target_range (tuple[float, float]): The target range ``(t0, t1)`` to map into.\n\nReturns:\n  float: The value mapped proportionally into ``target_range``.\n\ne.g., ``remap(50, (0, 100), (0, 10))`` → ``5.0``.",example:`from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Convert sensor value (0~1023) → motor speed (0~100)
 sensor_value = 512
@@ -1500,7 +1500,7 @@ bot.close()`},{name:"KamibotPi.angle3p(p1, p2, p3)",summary:"Compute the angle (
 a = KamibotPi.angle3p((0, 0), (1, 0), (1, 1))
 print("angle =", a)   # ~90.0`},{name:"Note (module constant)",summary:"A class of note → MIDI integer constants. Use forms like ``Note.C4`` directly as the ``melody`` argument.",details:'A scale-constant class defined in the pibot module. Holds integer constants from ``CM1`` (=0) through ``B5`` (=83).\nMiddle C (C4) = 60. Each octave up adds 12; each octave down subtracts 12.\n\nNaming rules:\n  ``C4``, ``D4``, ``E4`` … natural notes\n  ``Cs4`` (C♯4), ``Ds4`` (D♯4) … sharps\n  ``Db4`` (=Cs4), ``Eb4`` (=Ds4) … flat aliases for the same notes\n\nSee the table at the bottom of the "3. Sound" topic for the full scale.',example:`from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Use note constants directly
 print("Note.C4 =", Note.C4)   # 60
@@ -1513,7 +1513,7 @@ bot.melody(Note.G4, 0.4)
 
 bot.close()`},{name:"LED_COLOR (module constant)",summary:"A list constant mapping indexes 0~8 to 9 colors as ``[R, G, B]`` lists. Unpack with ``*`` to pass to ``turn_led``.",details:"A list of RGB lists for the 9 default colors defined in the pibot module. Same data table that ``turn_led_idx(idx)`` uses internally.\n\nIndex mapping:\n  0=red, 1=orange, 2=yellow, 3=green, 4=blue, 5=skyblue, 6=purple, 7=white, 8=off\n\nIf you want to look up by key name, use the ``LED`` dict, which holds the same data.",example:`from pibot import KamibotPi, LED_COLOR
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Cycle through every color by index order
 for rgb in LED_COLOR:
@@ -1524,7 +1524,7 @@ bot.turn_led(0, 0, 0)
 bot.close()`}]},{id:"virtual-keyboard",title:"13. Virtual Keyboard — drive KAMIBOT from the IDE keys",description:"Use the VirtualKeyboard module to read key input and control LEDs, melody, and driving in real time",icon:"keyboard",entries:[{name:"VirtualKeyboard module (concept)",summary:"Read the toolbar virtual keyboard synchronously and pair it with KAMIBOT actions.",details:'Pressing the keyboard icon in the IDE toolbar pops up a small virtual keyboard window. Buttons on that window (or the real keyboard while that window is focused) push key codes into the ``VirtualKeyboard`` module.\n\nThe use case is simple — receive key input from inside your KAMIBOT code to switch LED colors, drive the car, play melody notes, etc. for **real-time control**. Unlike ``input()`` which waits for a whole line and Enter, ``VirtualKeyboard`` delivers keys **one at a time** as they happen.\n\nKey points:\n  • Import with ``import VirtualKeyboard as kb`` (``kb`` is the conventional alias).\n  • There is only one function — ``kb.wait_key(ms)``. It waits up to ``ms`` milliseconds and returns ``-1`` if no key arrived.\n  • Letters/digits use lowercase ASCII codes; ESC/Enter/Space use the standard ASCII codes; arrows use custom codes in ``0x80~0x83``.\n  • Uses a queue **independent of** ``cv2.waitKey()``, so input never gets tangled even when an imshow window is open.\n\nThink of it as a "PC keyboard input" channel you can use the same way as KAMIBOT sensors such as ``get_object_detect()`` or ``get_line_sensor()``. It lets you instantly capture user intent (start/stop, color change, etc.) that sensors cannot read.',example:`import VirtualKeyboard as kb
 from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Open the virtual keyboard window from the toolbar icon first.
 print("Press any key (ESC to quit)")
@@ -1538,7 +1538,7 @@ while True:
 bot.close()`},{name:"kb.wait_key(ms)",summary:"Wait for the next single key. Returns ``-1`` if nothing arrived within ``ms``.",details:"Args:\n  ms (int): wait time in milliseconds. ``0`` or less means **block forever** until a key arrives.\nReturns:\n  int: the pressed key code, or ``-1`` on timeout.\n\nTwo usage patterns:\n\n  1) **Blocking mode** (``ms=0``): the call stalls until a key arrives. Clean for menu-style code that only needs one key at a time.\n  2) **Non-blocking mode** (small positive ``ms``, e.g. ``20``): wait briefly and return ``-1`` if nothing arrived. Use this when a driving loop needs to keep polling sensors or driving motors independent of key input.\n\nKAMIBOT commands wait for a serial response, so each call already takes some time. A typical main loop keeps ``kb.wait_key`` short, around 0~30 ms.",example:`import VirtualKeyboard as kb
 from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 while True:
     key = kb.wait_key(20)        # wait 20 ms then move on
@@ -1555,7 +1555,7 @@ bot.turn_led(0, 0, 0)
 bot.close()`},{name:"Key-code constants",summary:"Letters are lowercase ASCII; special keys use module constants for readability.",details:'Rather than memorising numeric codes, compare with the constants exposed on the module — e.g. ``kb.ESC``.\n\nLetters / digits (lowercase ASCII):\n  ``kb.A`` – ``kb.Z``        = letters (`ord("a")` – `ord("z")`)\n  ``kb.NUM_0`` – ``kb.NUM_9`` = digits (`ord("0")` – `ord("9")`)\n\nControl / common keys (standard ASCII):\n  ``kb.BACKSPACE`` = 8\n  ``kb.TAB``       = 9\n  ``kb.ENTER``     = 13\n  ``kb.ESC``       = 27\n  ``kb.SPACE``     = 32\n\nArrows (custom codes in 0x80+ to avoid colliding with printable ASCII):\n  ``kb.ARROW_LEFT``  = 0x80\n  ``kb.ARROW_UP``    = 0x81\n  ``kb.ARROW_RIGHT`` = 0x82\n  ``kb.ARROW_DOWN``  = 0x83\n\nNote: letter constants are all **lowercase** codes. The virtual keyboard does not carry Shift state, so ``kb.A`` is enough; ``ord("a")`` works identically if you prefer a literal.',example:`import VirtualKeyboard as kb
 from pibot import KamibotPi, LED_COLOR
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # Number keys 1~9 → indexes of LED_COLOR (9 preset colors)
 DIGIT_KEYS = [kb.NUM_1, kb.NUM_2, kb.NUM_3, kb.NUM_4, kb.NUM_5,
@@ -1592,7 +1592,7 @@ Key mapping:
   • ESC → quit`,example:`import VirtualKeyboard as kb
 from pibot import KamibotPi, Note
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 # key → (R, G, B, note) in one mapping
 PALETTE = {
@@ -1620,7 +1620,7 @@ bot.turn_led(0, 0, 0)
 bot.close()`},{name:"Example: drive KAMIBOT with WASD",summary:"Drive KAMIBOT from the PC keyboard in real time. The car moves only while keys keep coming.",details:'For driving, "moves while a key is held, stops when released" feels natural. Since the virtual keyboard only delivers events one key at a time, the pattern is **start as soon as a key arrives → auto-stop a short time later**. Too short feels jittery, too long feels sluggish — keep ``wait_key`` polling around 30~50 ms, and fall through to ``stop`` when no key arrives.\n\nFor driving you pick from two command families:\n  • ``go_forward_speed(L, R)`` / ``go_backward_speed`` — direct wheel speeds, good for fine-grained control.\n  • ``move_forward(value)`` and other unit-distance moves — runs to completion in one call, not suitable for real-time joystick-style control.\n\nThe first family (``*_speed``) is what we want here. Use ``go_dir_speed(ldir, lspeed, rdir, rspeed)`` to set each wheel direction independently — e.g. left backwards + right forwards = an in-place left pivot.\n\nKey mapping:\n  • W / S          : forward / backward\n  • A / D          : pivot left / pivot right\n  • SPACE          : immediate stop\n  • 1 / 2 / 3      : speed 40 / 70 / 100\n  • ESC            : quit\n\nWrapping in ``try/finally`` guarantees ``bot.stop()`` and ``bot.close()`` run even on exception or ESC quit — so the car never rolls away.',example:`import VirtualKeyboard as kb
 from pibot import KamibotPi
 
-bot = KamibotPi()
+bot = KamibotPi("COM85")  # example port
 
 speed = 70
 

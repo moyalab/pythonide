@@ -369,10 +369,14 @@ class Bitblock():
             self.P1 = 4
             self.P2 = 8
             self.P3 = 2
-            self.P4 = 9
+            self.P4 = 47
             self.P7 = 39
-            self.P11 = 7
+            self.P11 = 48
             self.P12 = 18
+            self.P13 = 12
+            self.P14 = 13
+            self.P15 = 11
+            self.P16 = 46
             self.SERVO = 16
             self.DCMOTOR = 46
 

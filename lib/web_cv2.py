@@ -59,7 +59,10 @@ class FrameRef:
         width (int): 가로 픽셀 수(프로퍼티).
         height (int): 세로 픽셀 수(프로퍼티).
     """
-    __slots__ = ("_token", "shape", "ndim", "dtype", "flags", "_w", "_h")
+    __slots__ = (
+        "_token", "shape", "ndim", "dtype", "flags", "_w", "_h",
+        "_fliph", "_flipv",
+    )
 
     def __init__(self, token, w, h, channels=3):
         self._token = int(token)
@@ -69,6 +72,8 @@ class FrameRef:
         self.ndim = 3
         self.dtype = np.dtype(np.uint8)
         self.flags = _Flags()
+        self._fliph = False
+        self._flipv = False
 
     @property
     def width(self):
@@ -183,8 +188,12 @@ def imshow(name, image):
         image: 표시할 이미지. :class:`FrameRef` 또는 numpy ndarray.
     """
     if isinstance(image, FrameRef):
-        # Pixels live on the main thread; just point the window at the token.
-        _cv2Bridge.imshowToken(str(name), int(image._token))
+        # Pixels live on the main thread; point the window at the token and
+        # carry the flip state so the main thread applies it at render time.
+        _cv2Bridge.imshowToken(
+            str(name), int(image._token),
+            bool(image._fliph), bool(image._flipv),
+        )
         return
     payload, w, h = _to_rgba_bytes(image)
     _cv2Bridge.imshow(str(name), int(w), int(h), payload)
@@ -276,10 +285,20 @@ def flip(image, axis):
         뒤집힌 새 ndarray, 또는 :class:`FrameRef` 의 경우 원본 그대로.
     """
     if isinstance(image, FrameRef):
-        # Flip will be applied by the main thread when imshow renders the
-        # frame; for v1 we just pass the token through so drawing stays
-        # aligned. (A future revision can carry a flip flag on the token.)
-        return image
+        # Flip is applied by the main thread when imshow renders the frame, so
+        # the bitmap and any queued overlays stay aligned. Carry the toggled
+        # flip state on a fresh token handle and leave the original untouched.
+        out = FrameRef(image._token, image._w, image._h, image.shape[2])
+        out._fliph = image._fliph
+        out._flipv = image._flipv
+        if axis == 0:
+            out._flipv = not out._flipv
+        elif axis == 1:
+            out._fliph = not out._fliph
+        else:
+            out._fliph = not out._fliph
+            out._flipv = not out._flipv
+        return out
     arr = np.asarray(image)
     if axis == 0:
         return arr[::-1, :].copy()
