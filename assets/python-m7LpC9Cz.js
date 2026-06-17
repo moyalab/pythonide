@@ -1,4 +1,4 @@
-import{m as o}from"./monacoBundle-CeNFn_qy.js";import"./index-CqWvn7kD.js";/*!-----------------------------------------------------------------------------
+import{m as o}from"./monacoBundle-5p6ZEjnC.js";import"./index-BVUA5qH3.js";/*!-----------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Version: 0.52.2(404545bded1df6ffa41ea0af4e8ddb219018c6c1)
  * Released under the MIT license
