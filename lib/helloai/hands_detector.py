@@ -42,12 +42,16 @@ _PATTERN_TO_SIGN = {
 """
 
 # RGB; converted to BGR before being handed to mediapipe DrawingSpec.
-_RIGHT_HAND_LINE_RGB = (216, 191, 216)  # thistle (light purple)
-"""오른손 연결선 색(thistle, RGB).
+# The right hand uses fixed blue shades for both joint points and connection
+# lines so it is clearly distinguishable from the left hand (which is drawn
+# with draw_color, defaulting to red shades).
+_RIGHT_HAND_POINT_RGB = (0, 90, 255)    # blue (joint points)
+_RIGHT_HAND_LINE_RGB = (150, 190, 255)  # light blue (connection lines)
+"""오른손 점/연결선 색(파랑 계열, RGB).
 
-왼손과 오른손을 시각적으로 구분하기 위해 오른손에는 항상 같은 옅은
-보라색을 사용합니다. MediaPipe ``DrawingSpec`` 에 넘기기 전에 BGR 로
-변환됩니다.
+왼손(빨강 계열, ``draw_color``)과 확실히 구분되도록 오른손에는 항상 파랑
+계열을 씁니다 — 점은 진한 파랑, 연결선은 연한 파랑. MediaPipe
+``DrawingSpec`` 에 넘기기 전에 BGR 로 변환됩니다.
 """
 
 
@@ -61,7 +65,9 @@ class HandsDetector:
 
     Args:
         draw_label (bool): ``True`` 면 :meth:`process` 가 손목 위에 사인
-            라벨 텍스트를 그립니다. 기본값은 ``True``.
+            라벨 텍스트를 그립니다. 기본값은 ``False`` — 영상을 좌우/상하
+            반전하면 라벨 글자도 함께 반전되어 읽기 어렵기 때문에 기본적으로
+            끕니다. 필요하면 ``True`` 로 켤 수 있습니다.
 
     Attributes:
         sign (dict[str, str | None]): ``{'left': sign_id, 'right': sign_id}``.
@@ -69,11 +75,12 @@ class HandsDetector:
             쪽은 ``None``.
     """
 
-    def __init__(self, draw_label=True):
+    def __init__(self, draw_label=False):
         """검출기 인스턴스를 만들고 모델을 초기화합니다.
 
         Args:
-            draw_label (bool): 사인 라벨 자동 표시 여부.
+            draw_label (bool): 사인 라벨 자동 표시 여부. 기본값 ``False``
+                (영상 반전 시 라벨 글자가 함께 반전되는 문제를 피하기 위함).
         """
         self.__mp_drawing = mp.solutions.drawing_utils
         self.__mp_hands = mp.solutions.hands
@@ -98,7 +105,7 @@ class HandsDetector:
         pass
 
     def process(self, image, draw=True, line_width=4, circle_radius=6,
-                draw_color=[(255, 0, 0), (192, 192, 192)], show_label=None):
+                draw_color=[(255, 0, 0), (255, 140, 140)], show_label=None):
         """한 프레임에서 양손을 검출하고 키포인트와 사인을 반환합니다.
 
         Args:
@@ -107,9 +114,13 @@ class HandsDetector:
                 그립니다.
             line_width (int): 연결선/점 굵기.
             circle_radius (int): 관절 점 반지름.
-            draw_color (list[tuple[int, int, int]]): ``[관절_RGB, 연결선_RGB]``.
-                내부에서 BGR 로 변환해 그립니다. 단, 오른손 연결선만은
-                구분을 위해 :data:`_RIGHT_HAND_LINE_RGB` 색을 강제로 사용합니다.
+            draw_color (list[tuple[int, int, int]]): **왼손**의
+                ``[관절_RGB, 연결선_RGB]``. 기본값은 빨강 계열(점
+                ``(255, 0, 0)``, 선 ``(255, 140, 140)``). 내부에서 BGR 로
+                변환해 그립니다. 오른손은 좌우 구분을 위해 항상 파랑 계열
+                고정색(:data:`_RIGHT_HAND_POINT_RGB` /
+                :data:`_RIGHT_HAND_LINE_RGB`)을 쓰며 이 인자의 영향을
+                받지 않습니다.
             show_label (bool | None): 사인 라벨 표시 여부를 호출 단위로
                 덮어씁니다. ``None`` 이면 생성자의 ``draw_label`` 을 사용합니다.
 
@@ -153,21 +164,25 @@ class HandsDetector:
                 joint = np.zeros((21, 3))
 
                 if self.__draw:
-                    rgb1 = draw_color[0]
-                    # right-hand connection lines use a fixed light-purple shade
-                    rgb2 = _RIGHT_HAND_LINE_RGB if label == 'right' else draw_color[1]
+                    # Left hand uses draw_color [points, lines]; the right hand
+                    # uses fixed blue shades so the two hands are clearly
+                    # distinct in both joint points and connection lines.
+                    if label == 'right':
+                        point_rgb, line_rgb = _RIGHT_HAND_POINT_RGB, _RIGHT_HAND_LINE_RGB
+                    else:
+                        point_rgb, line_rgb = draw_color[0], draw_color[1]
 
                     self.__mp_drawing.draw_landmarks(
                         image,
                         hand_landmarks,
                         self.__mp_hands.HAND_CONNECTIONS,
                         self.__mp_drawing.DrawingSpec(
-                            color=(rgb1[2], rgb1[1], rgb1[0]),
+                            color=(point_rgb[2], point_rgb[1], point_rgb[0]),
                             thickness=line_width,
                             circle_radius=circle_radius,
                         ),
                         self.__mp_drawing.DrawingSpec(
-                            color=(rgb2[2], rgb2[1], rgb2[0]),
+                            color=(line_rgb[2], line_rgb[1], line_rgb[0]),
                             thickness=line_width,
                             circle_radius=circle_radius,
                         ),
