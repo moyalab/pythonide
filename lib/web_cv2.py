@@ -347,6 +347,8 @@ def line(image, pt1, pt2, color, thickness=1):
             "pt2": [int(pt2[0]), int(pt2[1])],
             "color": _bgr_to_rgb_list(color),
             "thickness": int(thickness),
+            "flipH": bool(getattr(image, "_fliph", False)),
+            "flipV": bool(getattr(image, "_flipv", False)),
         })
     return image
 
@@ -372,6 +374,8 @@ def circle(image, center, radius, color, thickness=1):
             "radius": int(radius),
             "color": _bgr_to_rgb_list(color),
             "thickness": int(thickness),
+            "flipH": bool(getattr(image, "_fliph", False)),
+            "flipV": bool(getattr(image, "_flipv", False)),
         })
     return image
 
@@ -397,6 +401,8 @@ def rectangle(image, pt1, pt2, color, thickness=1):
             "pt2": [int(pt2[0]), int(pt2[1])],
             "color": _bgr_to_rgb_list(color),
             "thickness": int(thickness),
+            "flipH": bool(getattr(image, "_fliph", False)),
+            "flipV": bool(getattr(image, "_flipv", False)),
         })
     return image
 
@@ -433,6 +439,8 @@ def putText(image, text, org, fontFace, fontScale, color, thickness=1, lineType=
             "fontPx": int(round(float(fontScale) * 14)),
             "color": _bgr_to_rgb_list(color),
             "thickness": int(thickness),
+            "flipH": bool(getattr(image, "_fliph", False)),
+            "flipV": bool(getattr(image, "_flipv", False)),
         })
     return image
 
